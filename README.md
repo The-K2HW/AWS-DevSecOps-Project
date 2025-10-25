@@ -23,7 +23,7 @@ We adopted the 3-Tier Architecture pattern, which separates the system into dist
 
 ## Architecture Diagram
 
-![AWS 3-Tier Architecture](./assets/Architecture.png.png)
+![AWS 3-Tier Architecture](./assets/Architecture.png)
 
 **Key Components:**
 - VPC (10.0.0.0/16): Isolated network for all AWS resources  
