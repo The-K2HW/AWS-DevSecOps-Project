@@ -162,7 +162,6 @@ To provide a reliable and secure data storage service using **Amazon RDS (MySQL)
 **Outcome:**
 - Database credentials are encrypted, centrally managed, and retrievable only by authorized EC2 instances.  
 - The architecture ensures confidentiality and integrity of stored data.  
-- Future improvements can enable Multi-AZ deployment for full high availability.
 
 ---
 
