@@ -2,18 +2,17 @@
 
 ## Table of Contents
 1. [Introduction](#introduction)  
-2. [Capstone Project](#capstone-project)
-  - [Existing Architecture](#21-existing-architecture) 
-  - [Problems with existing architecture](#22-problems-with-existing-architecture)
+2. [Capstone Project](#capstone-project)  
+  - [2.1. Existing Architecture](#21-existing-architecture)  
+  - [2.2. Problems with existing architecture](#22-problems-with-existing-architecture)  
 3. [Project Objectives](#project-objectives)  
-4. [System Overview](#system-overview)  
-5. [Architectural Design](#architectural-design)  
-   - [4.1. Improved Architecture](#41-improved-architecture)  
-   - [4.2. System Components](#42-system-components)
-   - [4.3. Networking Layer](#42-networking-layer)  
-   - [4.4. Security Boundaries](#43-security-boundaries)  
-   - [4.5. Data Layer](#44-data-layer)  
-6. [Design Justifications](#design-justifications)  
+4. [Architectural Design](#architectural-design)  
+  - [4.1. Improved Architecture](#41-improved-architecture)  
+  - [4.2. System Components](#42-system-components)  
+  - [4.3. Networking Layer](#43-networking-layer)  
+  - [4.4. Security Boundaries](#44-security-boundaries)  
+  - [4.5. Data Layer](#45-data-layer)  
+5. [Design Justifications](#design-justifications)  
 
 ---
 
@@ -27,12 +26,13 @@ The system hosts a **PHP-based research website** that allows users to query dev
 ---
 
 ## Capstone Project
-### 2.1. Existing Architecture
+
+## 2.1. Existing Architecture
 The original capstone project deployed a simple PHP application and MySQL database on a single EC2 instance within a public subnet:
 
 ![AWS 3-Tier Architecture](./assets/ExistingArchitecture.png)
 
-### 2.2. Problems with existing architecture
+## 2.2. Problems with existing architecture
 While the project is functional, the adopted architecture suffers from several security and scalability flaws:
 - The database and web server share the same EC2 instance, creating a single point of failure
 - The instance is hosted on a public subnet which means it's publicly accessible, exposing both the application and database to external threats
@@ -63,7 +63,7 @@ The application consists of three primary tiers:
 
 | Tier | Components | Purpose |
 |------|-------------|----------|
-| **Presentation Tier (Web)** | Application Load Balancer (ALB), Bastion Host (Public Subnets) | Handles all incoming HTTP traffic and provides secure administrative access. |
+| **Presentation Tier (Web)** | Application Load Balancer (ALB), Bastion Host (Public Subnets), NAT Gateway | Handles all incoming HTTP traffic and provides secure administrative access. |
 | **Application Tier (Logic)** | EC2 Auto Scaling Group (Private Subnets), IAM Roles, Secrets Manager | Hosts the PHP application, retrieves credentials dynamically, and ensures horizontal scalability. |
 | **Data Tier (Storage)** | Amazon RDS MySQL (Private Subnets) | Stores research data, replicated across Availability Zones for high availability. |
 
