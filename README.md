@@ -3,16 +3,16 @@
 ## Table of Contents
 1. [Introduction](#introduction)  
 2. [Capstone Project](#capstone-project)  
-  - [2.1. Existing Architecture](#21-existing-architecture)  
-  - [2.2. Problems with existing architecture](#22-problems-with-existing-architecture)  
+    - [2.1. Existing Architecture](#21-existing-architecture)  
+    - [2.2. Problems with Existing Architecture](#22-problems-with-existing-architecture)  
 3. [Project Objectives](#project-objectives)  
 4. [Architectural Design](#architectural-design)  
-  - [4.1. Improved Architecture](#41-improved-architecture)  
-  - [4.2. System Components](#42-system-components)  
-  - [4.3. Networking Layer](#43-networking-layer)  
-  - [4.4. Security Boundaries](#44-security-boundaries)  
-  - [4.5. Data Layer](#45-data-layer)  
-5. [Design Justifications](#design-justifications)  
+    - [4.1. Improved Architecture](#41-improved-architecture)  
+    - [4.2. System Components](#42-system-components)  
+    - [4.3. Networking Layer](#43-networking-layer)  
+    - [4.4. Security Boundaries](#44-security-boundaries)  
+    - [4.5. Data Layer](#45-data-layer)  
+5. [Design Justifications](#design-justifications)
 
 ---
 
