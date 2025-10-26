@@ -9,3 +9,14 @@ variable "project_name" {
   type        = string
   default     = "devsecops-project"
 }
+
+variable "app_repo_url" {
+  description = "GitHub URL for PHP app"
+  type        = string
+}
+
+variable "app_repo_branch" {
+  description = "Branch to deploy"
+  type        = string
+  default     = "main"
+}
