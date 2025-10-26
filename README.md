@@ -1,29 +1,45 @@
 # Secure Cloud Architecture for a Research Website  
-*(Based on the AWS Cloud Architecting Capstone Project Website)*  
-
----
 
 ## Table of Contents
 1. [Introduction](#introduction)  
-2. [Project Objectives](#project-objectives)  
-3. [System Overview](#system-overview)  
-4. [Architectural Design](#architectural-design)  
-   - [4.1. General Overview](#41-general-overview)  
-   - [4.2. Networking Layer](#42-networking-layer)  
-   - [4.3. Security Boundaries](#43-security-boundaries)  
-   - [4.4. Data Layer](#44-data-layer)  
-5. [Design Justifications](#design-justifications)  
+2. [Capstone Project](#capstone-project)
+  - [Existing Architecture](#21-existing-architecture) 
+  - [Problems with existing architecture](#22-problems-with-existing-architecture)
+3. [Project Objectives](#project-objectives)  
+4. [System Overview](#system-overview)  
+5. [Architectural Design](#architectural-design)  
+   - [4.1. Improved Architecture](#41-improved-architecture)  
+   - [4.2. System Components](#42-system-components)
+   - [4.3. Networking Layer](#42-networking-layer)  
+   - [4.4. Security Boundaries](#43-security-boundaries)  
+   - [4.5. Data Layer](#44-data-layer)  
+6. [Design Justifications](#design-justifications)  
 
 ---
 
 ## Introduction
 
-This project demonstrates the implementation of a **secure, scalable, and high-availability 3-tier cloud architecture** on Amazon Web Services (AWS).  
+This project demonstrates the implementation of a **3-tier cloud architecture** on Amazon Web Services (AWS).  
 It is based on the AWS Cloud Architecting Capstone Project and has been extended with additional **DevSecOps** and **security best practices** to ensure compliance with the principles of **least privilege**, **defense in depth**, and **confidentiality of data**.
 
 The system hosts a **PHP-based research website** that allows users to query development statistics from a MySQL database. The architecture was built and deployed using **Terraform**, following Infrastructure-as-Code (IaC) best practices.
 
 ---
+
+## Capstone Project
+### 2.1. Existing Architecture
+The original capstone project deployed a simple PHP application and MySQL database on a single EC2 instance within a public subnet:
+
+![AWS 3-Tier Architecture](./assets/ExistingArchitecture.png)
+
+### 2.2. Problems with existing architecture
+While the project is functional, the adopted architecture suffers from several security and scalability flaws:
+- The database and web server share the same EC2 instance, creating a single point of failure
+- The instance is hosted on a public subnet which means it's publicly accessible, exposing both the application and database to external threats
+- No network segmentation exists between tiers.
+- Database credentials are stored in plaintext within the PHP application
+- Manual provisioning is required, leading to configuration drift and human error.
+
 
 ## Project Objectives
 
@@ -36,7 +52,12 @@ The main goals of this project are:
 
 ---
 
-## System Overview
+## Architectural Design
+
+## 4.1. Improved Architecture
+To address the issues with the existing architecture, this project redesigns the solution into a secure, automated and scalable **3-Tier Cloud Architecture** using AWS best practices:
+
+![AWS 3-Tier Architecture](./assets/Architecture.png)
 
 The application consists of three primary tiers:
 
@@ -46,18 +67,17 @@ The application consists of three primary tiers:
 | **Application Tier (Logic)** | EC2 Auto Scaling Group (Private Subnets), IAM Roles, Secrets Manager | Hosts the PHP application, retrieves credentials dynamically, and ensures horizontal scalability. |
 | **Data Tier (Storage)** | Amazon RDS MySQL (Private Subnets) | Stores research data, replicated across Availability Zones for high availability. |
 
-The infrastructure was developed incrementally, with each Terraform module building on the previous one.
+The new Archtiecture introduces : 
+- Network Isolation : Multiple public and private subnets
+- Load Balancing and autoscaling for the application tier
+- Secrets Manager for secure credential management
+- IAM lest privilege for all compute resources
+- Monitoring and logging via CloudWatch and GuardDuty
+- Terraform-based automation
 
 ---
 
-## Architectural Design
-
-### 4.1. General Overview
-
-The architecture follows a **3-Tier AWS design**, ensuring that each layer is isolated and communicates only with the adjacent layer.  
-This approach enhances **security**, **scalability**, and **maintainability**.
-
-![AWS 3-Tier Architecture](./assets/Architecture.png)
+### 4.2. System Components
 
 **Main AWS Components:**
 - **VPC (10.0.0.0/16)**: Defines an isolated network environment for all components.  
@@ -74,7 +94,7 @@ This approach enhances **security**, **scalability**, and **maintainability**.
 
 ---
 
-### 4.2. Networking Layer
+### 4.3. Networking Layer
 
 **Purpose:**  
 To establish a secure, highly available virtual network environment that isolates public and private resources.
@@ -95,7 +115,7 @@ This configuration ensures that:
 
 ---
 
-### 4.3. Security Boundaries
+### 4.4. Security Boundaries
 
 **Purpose:**  
 To enforce network and identity boundaries that protect resources from unauthorized access.
@@ -122,7 +142,7 @@ Internet → ALB → EC2 → RDS
 
 ---
 
-### 4.4. Data Layer
+### 4.5. Data Layer
 
 **Purpose:**  
 To provide a reliable and secure data storage service using **Amazon RDS (MySQL)** and manage its credentials via **AWS Secrets Manager**.
