@@ -30,13 +30,19 @@ resource "aws_db_instance" "rds_instance" {
   password          = random_password.db_password.result
   db_name           = "countries"
   port              = 3306
+  skip_final_snapshot        = true # to avoid snapshot cost on destroy
+  deletion_protection        = false
 
+
+  backup_retention_period    = 7
+  backup_window              = "03:00-04:00"
+  copy_tags_to_snapshot      = true
+  auto_minor_version_upgrade = true
+  
+  publicly_accessible        = false
+  
   db_subnet_group_name   = aws_db_subnet_group.rds_subnet_group.name
   vpc_security_group_ids = [aws_security_group.rds_sg.id]
-
-  publicly_accessible = false
-  skip_final_snapshot = true # to avoid snapshot cost on destroy
-  deletion_protection = false
 
   tags = {
     Name = "${var.project_name}-rds-instance"

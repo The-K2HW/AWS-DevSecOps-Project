@@ -25,7 +25,7 @@ resource "aws_launch_template" "app_lt" {
   name_prefix   = "${var.project_name}-lt-"
   image_id      = data.aws_ami.al2023.image_id
   instance_type = "t3.micro"
-  key_name = "bastion-key"
+  key_name      = "bastion-key"
 
   # Least-privilege EC2 role
   iam_instance_profile {
