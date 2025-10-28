@@ -5,6 +5,7 @@
 # SG For ALB
 
 resource "aws_security_group" "alb_sg" {
+  count       = var.use_alb ? 1 : 0
   name        = "${var.project_name}-alb-sg"
   description = "Enable HTTP traffic from the Internet to ALB"
   vpc_id      = aws_vpc.main.id
@@ -37,14 +38,6 @@ resource "aws_security_group" "ec2_sg" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    description     = "Allow HTTP from ALB"
-    from_port       = 80
-    to_port         = 80
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb_sg.id]
-  }
-
-  ingress {
     description     = "SSH from Bastion"
     from_port       = 22
     to_port         = 22
@@ -62,6 +55,30 @@ resource "aws_security_group" "ec2_sg" {
   tags = {
     Name = "${var.project_name}-ec2-sg"
   }
+}
+
+# HTTP to EC2 from ALB (when ALB is enabled)
+resource "aws_security_group_rule" "ec2_http_from_alb" {
+  count                    = var.use_alb ? 1 : 0
+  type                     = "ingress"
+  description              = "Allow HTTP from ALB"
+  from_port                = 80
+  to_port                  = 80
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.ec2_sg.id
+  source_security_group_id = aws_security_group.alb_sg[0].id
+}
+
+# HTTP to EC2 directly from Internet (when ALB is disabled)
+resource "aws_security_group_rule" "ec2_http_from_world" {
+  count             = var.use_alb ? 0 : 1
+  type              = "ingress"
+  description       = "Allow HTTP from Internet (no ALB)"
+  from_port         = 80
+  to_port           = 80
+  protocol          = "tcp"
+  security_group_id = aws_security_group.ec2_sg.id
+  cidr_blocks       = ["0.0.0.0/0"]
 }
 
 # SG For RDS

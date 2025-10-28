@@ -20,3 +20,10 @@ variable "app_repo_branch" {
   type        = string
   default     = "main"
 }
+
+# Feature flag to allow deploying without an ALB when the account does not permit it.
+variable "use_alb" {
+  description = "Whether to create the Application Load Balancer and route traffic through it"
+  type        = bool
+  default     = false
+}

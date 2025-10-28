@@ -40,7 +40,7 @@ resource "aws_db_instance" "rds_instance" {
   auto_minor_version_upgrade = true
   
   publicly_accessible        = false
-  
+
   db_subnet_group_name   = aws_db_subnet_group.rds_subnet_group.name
   vpc_security_group_ids = [aws_security_group.rds_sg.id]
 
@@ -56,6 +56,7 @@ resource "aws_db_instance" "rds_instance" {
 resource "random_password" "db_password" {
   length  = 16
   special = true
+  override_special = "!#$%&()*+,-.:;<=>?[]^_{|}~"
 }
 
 ############################################
