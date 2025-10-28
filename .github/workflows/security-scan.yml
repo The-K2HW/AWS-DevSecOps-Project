@@ -33,16 +33,20 @@ jobs:
           audit_on: "push"
 
       # -------------------------------
-      # Step 3: Run tfsec (Terraform IaC Scan)
+      # Step 3: Run Trivy IaC Scan (Terraform security)
       # -------------------------------
-      - name: Run tfsec (Terraform IaC Scan)
-        uses: aquasecurity/tfsec-action@v1
+      - name: Run Trivy IaC Scan (Terraform)
+        uses: aquasecurity/trivy-action@master
         with:
-          format: sarif
-          output_file: tfsec-results.sarif
+          scan-type: config
+          scan-ref: ./infra        
+          format: 'sarif'
+          output: 'tfsec-results.sarif'
+          exit-code: '0'
+          severity: 'HIGH,CRITICAL'
 
-      # Upload results to GitHub Security Dashboard
-      - name: Upload tfsec results to GitHub Security Dashboard
+      # Upload IaC scan results
+      - name: Upload Trivy IaC results to GitHub Security Dashboard
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: tfsec-results.sarif
@@ -60,7 +64,7 @@ jobs:
         run: docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/research-app:latest .
 
       # -------------------------------
-      # Step 6: Run Trivy vulnerability scan (SCA)
+      # Step 6: Run Trivy Image Scan (SCA)
       # -------------------------------
       - name: Run Trivy vulnerability scan
         uses: aquasecurity/trivy-action@master
