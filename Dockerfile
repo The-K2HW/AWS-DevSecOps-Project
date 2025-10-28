@@ -13,8 +13,7 @@ WORKDIR /var/www/html
 COPY ./app/ /var/www/html/
 
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer \
-    && composer install --no-interaction --no-progress --prefer-dist \
-    && composer require aws/aws-sdk-php --no-progress --no-interaction
+    && composer require aws/aws-sdk-php --no-progress --no-interaction --working-dir=/var/www/html
 
 RUN chown -R www-data:www-data /var/www/html && chmod -R 755 /var/www/html
 
