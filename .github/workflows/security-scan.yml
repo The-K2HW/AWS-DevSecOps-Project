@@ -37,13 +37,12 @@ jobs:
         run: aws sts get-caller-identity
 
       # -------------------------------
-      # Step 3: Initialize CodeQL (SAST)
+      # Step 3: Semgrep SAST Scan
       # -------------------------------
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+      - name: Run Semgrep (SAST)
+        uses: returntocorp/semgrep-action@v1
         with:
-          languages: 'php'
-          queries: security-and-quality
+          config: "p/php"
 
       # -------------------------------
       # Step 4: Autobuild and Analyze CodeQL
