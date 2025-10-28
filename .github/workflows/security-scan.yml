@@ -1,4 +1,4 @@
-name: Security Scan (SAST & SCA)
+name: Security Scan (SAST, SCA & IaC)
 
 on:
   push:
@@ -33,19 +33,34 @@ jobs:
           audit_on: "push"
 
       # -------------------------------
-      # Step 3: Login to Docker Hub
+      # Step 3: Run tfsec (Terraform IaC Scan)
+      # -------------------------------
+      - name: Run tfsec (Terraform IaC Scan)
+        uses: aquasecurity/tfsec-action@v1
+        with:
+          format: sarif
+          output_file: tfsec-results.sarif
+
+      # Upload results to GitHub Security Dashboard
+      - name: Upload tfsec results to GitHub Security Dashboard
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: tfsec-results.sarif
+
+      # -------------------------------
+      # Step 4: Login to Docker Hub
       # -------------------------------
       - name: Login to Docker Hub
         run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
       # -------------------------------
-      # Step 4: Build Docker image
+      # Step 5: Build Docker image
       # -------------------------------
       - name: Build Docker image
         run: docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/research-app:latest .
 
       # -------------------------------
-      # Step 5: Run Trivy vulnerability scan (SCA)
+      # Step 6: Run Trivy vulnerability scan (SCA)
       # -------------------------------
       - name: Run Trivy vulnerability scan
         uses: aquasecurity/trivy-action@master
@@ -60,7 +75,7 @@ jobs:
           exit-code: '0'
 
       # -------------------------------
-      # Step 6: Upload SARIF to GitHub Security Dashboard
+      # Step 7: Upload Trivy results to GitHub Security Dashboard
       # -------------------------------
       - name: Upload Trivy scan results to GitHub Security Dashboard
         uses: github/codeql-action/upload-sarif@v3
@@ -68,7 +83,26 @@ jobs:
           sarif_file: trivy-results.sarif
 
       # -------------------------------
-      # Step 7: Push Docker image (only if scan passes)
+      # Step 8: Evaluate CRITICAL vulnerabilities
+      # -------------------------------
+      - name: Evaluate vulnerability severity
+        id: eval
+        run: |
+          critical=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy-results.sarif || echo 0)
+          echo "Detected $critical critical vulnerabilities."
+          echo "critical=$critical" >> $GITHUB_OUTPUT
+
+      # -------------------------------
+      # Step 9: Fail pipeline if CRITICAL vulnerabilities exist
+      # -------------------------------
+      - name: Fail pipeline on critical vulnerabilities
+        if: ${{ steps.eval.outputs.critical != '0' }}
+        run: |
+          echo "CRITICAL VULNERABILITIES FOUND: Security scan failed. Check trivy-results.sarif."
+          exit 1
+
+      # -------------------------------
+      # Step 10: Push Docker image (only if scan passes)
       # -------------------------------
       - name: Push Docker image
         if: success()
