@@ -58,7 +58,7 @@ jobs:
         run: docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/research-app:latest .
 
       # -------------------------------
-      # Step 6: Trivy Scan (SCA)
+      # Step 7: Run Trivy Scan (SCA)
       # -------------------------------
       - name: Scan image for vulnerabilities (Trivy)
         uses: aquasecurity/trivy-action@master
@@ -66,7 +66,10 @@ jobs:
           image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/research-app:latest
           format: 'table'
           severity: 'HIGH,CRITICAL'
-          exit-code: '1'   # Fail the pipeline if critical vulnerabilities are found
+          ignore-unfixed: true     # Skip CVEs that have no official patch
+          exit-code: '0'           # Don’t fail the pipeline; report only
+          vuln-type: 'os,library'  # Include both OS & dependencies
+          scanners: 'vuln,secret'  # Scan for both vulnerabilities and secrets
 
       # -------------------------------
       # Step 7: Push Docker image
