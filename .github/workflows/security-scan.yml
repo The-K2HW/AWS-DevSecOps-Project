@@ -58,23 +58,30 @@ jobs:
         run: docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/research-app:latest .
 
       # -------------------------------
-      # Step 7: Run Trivy Scan (SCA) - Conditional Enforcement
+      # Step 7: Run Trivy Scan (SCA) - SARIF output for GitHub Security Dashboard
       # -------------------------------
-      - name: Scan image for vulnerabilities (Trivy)
-        id: trivy
+      - name: Run Trivy vulnerability scan
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/research-app:latest
-          format: 'json'                     
-          output: trivy-report.json          
-          severity: 'HIGH,CRITICAL'
-          ignore-unfixed: true               
-          exit-code: '0'                     
+          format: 'sarif'                    
+          output: trivy-results.sarif        
+          ignore-unfixed: true
           vuln-type: 'os,library'
           scanners: 'vuln,secret'
+          severity: 'HIGH,CRITICAL'
+          exit-code: '0'
 
       # -------------------------------
-      # Step 8: Parse Trivy Results
+      # Step 8: Upload SARIF results to GitHub Security Dashboard
+      # -------------------------------
+      - name: Upload Trivy scan results to GitHub Security Dashboard
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+
+      # -------------------------------
+      # Step 9: Parse Trivy Results
       # -------------------------------
       - name: Evaluate vulnerability severity
         id: eval
@@ -84,7 +91,7 @@ jobs:
           echo "critical=$critical" >> $GITHUB_OUTPUT
 
       # -------------------------------
-      # Step 9: Fail if CRITICAL CVEs exist
+      # Step 10: Fail if CRITICAL CVEs exist
       # -------------------------------
       - name: Fail pipeline on critical vulnerabilities
         if: ${{ steps.eval.outputs.critical != '0' }}
@@ -93,7 +100,7 @@ jobs:
           exit 1
 
       # -------------------------------
-      # Step 10: Upload report as artifact
+      # Step 11: Upload report as artifact
       # -------------------------------
       - name: Upload Trivy Report
         uses: actions/upload-artifact@v4
@@ -102,7 +109,7 @@ jobs:
           path: trivy-report.json
 
       # -------------------------------
-      # Step 7: Push Docker image
+      # Step 12: Push Docker image
       # -------------------------------
       - name: Push Docker image
         if: success()
