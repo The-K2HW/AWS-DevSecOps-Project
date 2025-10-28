@@ -58,18 +58,48 @@ jobs:
         run: docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/research-app:latest .
 
       # -------------------------------
-      # Step 7: Run Trivy Scan (SCA)
+      # Step 7: Run Trivy Scan (SCA) - Conditional Enforcement
       # -------------------------------
       - name: Scan image for vulnerabilities (Trivy)
+        id: trivy
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/research-app:latest
-          format: 'table'
+          format: 'json'                     
+          output: trivy-report.json          
           severity: 'HIGH,CRITICAL'
-          ignore-unfixed: true     # Skip CVEs that have no official patch
-          exit-code: '0'           # Don’t fail the pipeline; report only
-          vuln-type: 'os,library'  # Include both OS & dependencies
-          scanners: 'vuln,secret'  # Scan for both vulnerabilities and secrets
+          ignore-unfixed: true               
+          exit-code: '0'                     
+          vuln-type: 'os,library'
+          scanners: 'vuln,secret'
+
+      # -------------------------------
+      # Step 8: Parse Trivy Results
+      # -------------------------------
+      - name: Evaluate vulnerability severity
+        id: eval
+        run: |
+          critical=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy-report.json)
+          echo "Detected $critical critical vulnerabilities."
+          echo "critical=$critical" >> $GITHUB_OUTPUT
+
+      # -------------------------------
+      # Step 9: Fail if CRITICAL CVEs exist
+      # -------------------------------
+      - name: Fail pipeline on critical vulnerabilities
+        if: ${{ steps.eval.outputs.critical != '0' }}
+        run: |
+          echo "WARNING - CRITICAL VULNERABILITIES FOUND : Security scan failed, please check trivy-report.json."
+          exit 1
+
+      # -------------------------------
+      # Step 10: Upload report as artifact
+      # -------------------------------
+      - name: Upload Trivy Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-report
+          path: trivy-report.json
 
       # -------------------------------
       # Step 7: Push Docker image
