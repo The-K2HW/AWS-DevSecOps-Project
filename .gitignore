@@ -4,3 +4,4 @@ terraform.tfstate.backup
 .terraform/
 outputs.txt
 tfplan-destroy
+terraform.tfstate.backup.*
