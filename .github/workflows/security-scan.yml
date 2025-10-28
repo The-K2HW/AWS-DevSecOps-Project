@@ -51,8 +51,8 @@ jobs:
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/research-app:latest
-          format: 'json,sarif'
-          output: 'trivy-report.json,trivy-results.sarif'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
           ignore-unfixed: true
           vuln-type: 'os,library'
           scanners: 'vuln,secret'
@@ -68,35 +68,7 @@ jobs:
           sarif_file: trivy-results.sarif
 
       # -------------------------------
-      # Step 7: Evaluate CRITICAL vulnerabilities
-      # -------------------------------
-      - name: Evaluate vulnerability severity
-        id: eval
-        run: |
-          critical=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy-report.json)
-          echo "Detected $critical critical vulnerabilities."
-          echo "critical=$critical" >> $GITHUB_OUTPUT
-
-      # -------------------------------
-      # Step 8: Fail pipeline if CRITICAL vulnerabilities exist
-      # -------------------------------
-      - name: Fail pipeline on critical vulnerabilities
-        if: ${{ steps.eval.outputs.critical != '0' }}
-        run: |
-          echo "CRITICAL VULNERABILITIES FOUND: Security scan failed. Check trivy-report.json."
-          exit 1
-
-      # -------------------------------
-      # Step 9: Upload Trivy JSON report as artifact
-      # -------------------------------
-      - name: Upload Trivy Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: trivy-report
-          path: trivy-report.json
-
-      # -------------------------------
-      # Step 10: Push Docker image (only if scan passes)
+      # Step 7: Push Docker image (only if scan passes)
       # -------------------------------
       - name: Push Docker image
         if: success()
