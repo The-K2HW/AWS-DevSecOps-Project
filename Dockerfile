@@ -12,8 +12,11 @@ RUN a2enmod rewrite
 WORKDIR /var/www/html
 COPY ./app/ /var/www/html/
 
-RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer \
-    && composer require aws/aws-sdk-php --no-progress --no-interaction --working-dir=/var/www/html
+RUN apt-get update && apt-get upgrade -y && apt-get install -y \
+    git \
+    unzip \
+    && docker-php-ext-install mysqli pdo pdo_mysql \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN chown -R www-data:www-data /var/www/html && chmod -R 755 /var/www/html
 
