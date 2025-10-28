@@ -93,7 +93,6 @@ resource "aws_launch_template" "app_lt" {
 ############################################
 
 resource "aws_lb_target_group" "app_tg" {
-  count       = var.use_alb ? 1 : 0
   name        = "${var.project_name}-tg"
   port        = 80
   protocol    = "HTTP"
@@ -120,10 +119,9 @@ resource "aws_lb_target_group" "app_tg" {
 ############################################
 
 resource "aws_lb" "app_alb" {
-  count              = var.use_alb ? 1 : 0
   name               = "${var.project_name}-alb"
   load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb_sg[0].id]
+  security_groups    = [aws_security_group.alb_sg.id]
   subnets = [
     aws_subnet.public_a.id,
     aws_subnet.public_b.id
@@ -139,14 +137,13 @@ resource "aws_lb" "app_alb" {
 ############################################
 
 resource "aws_lb_listener" "http_listener" {
-  count             = var.use_alb ? 1 : 0
-  load_balancer_arn = aws_lb.app_alb[0].arn
+  load_balancer_arn = aws_lb.app_alb.arn
   port              = 80
   protocol          = "HTTP"
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.app_tg[0].arn
+    target_group_arn = aws_lb_target_group.app_tg.arn
   }
 }
 
@@ -159,13 +156,11 @@ resource "aws_autoscaling_group" "app_asg" {
   max_size         = 2
   min_size         = 1
   desired_capacity = 1
-  vpc_zone_identifier = var.use_alb ? [
-    aws_subnet.private_a.id,
-    aws_subnet.private_b.id
-  ] : [
+  vpc_zone_identifier = [
     aws_subnet.public_a.id,
     aws_subnet.public_b.id
   ]
+
   health_check_type         = "EC2"
   health_check_grace_period = 120
 
@@ -174,7 +169,7 @@ resource "aws_autoscaling_group" "app_asg" {
     version = "$Latest"
   }
 
-  target_group_arns = var.use_alb ? [aws_lb_target_group.app_tg[0].arn] : []
+  target_group_arns = [aws_lb_target_group.app_tg.arn]
 
   tag {
     key                 = "Name"
@@ -193,5 +188,5 @@ resource "aws_autoscaling_group" "app_asg" {
 
 output "alb_dn_name" {
   description = "Public DNS name of ALB"
-  value       = var.use_alb ? aws_lb.app_alb[0].dns_name : ""
+  value       = aws_lb.app_alb.dns_name
 }

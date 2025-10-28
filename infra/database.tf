@@ -20,26 +20,26 @@ resource "aws_db_subnet_group" "rds_subnet_group" {
 ############################################
 
 resource "aws_db_instance" "rds_instance" {
-  identifier        = "${var.project_name}-rds"
-  engine            = "mysql"
-  engine_version    = "8.0"
-  instance_class    = "db.t3.micro"
-  allocated_storage = 20 # 20 GB
-  multi_az          = true
-  username          = "admin"
-  password          = random_password.db_password.result
-  db_name           = "countries"
-  port              = 3306
-  skip_final_snapshot        = true # to avoid snapshot cost on destroy
-  deletion_protection        = false
+  identifier          = "${var.project_name}-rds"
+  engine              = "mysql"
+  engine_version      = "8.0"
+  instance_class      = "db.t3.micro"
+  allocated_storage   = 20 # 20 GB
+  multi_az            = true
+  username            = "admin"
+  password            = random_password.db_password.result
+  db_name             = "countries"
+  port                = 3306
+  skip_final_snapshot = true # to avoid snapshot cost on destroy
+  deletion_protection = false
 
 
   backup_retention_period    = 7
   backup_window              = "03:00-04:00"
   copy_tags_to_snapshot      = true
   auto_minor_version_upgrade = true
-  
-  publicly_accessible        = false
+
+  publicly_accessible = false
 
   db_subnet_group_name   = aws_db_subnet_group.rds_subnet_group.name
   vpc_security_group_ids = [aws_security_group.rds_sg.id]
@@ -54,8 +54,8 @@ resource "aws_db_instance" "rds_instance" {
 ############################################
 
 resource "random_password" "db_password" {
-  length  = 16
-  special = true
+  length           = 16
+  special          = true
   override_special = "!#$%&()*+,-.:;<=>?[]^_{|}~"
 }
 
