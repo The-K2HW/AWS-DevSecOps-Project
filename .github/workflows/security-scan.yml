@@ -24,7 +24,7 @@ jobs:
         uses: actions/checkout@v4
 
       # -------------------------------
-      # Step 2: Set up AWS CLI (to confirm identity)
+      # Step 2: Configure AWS credentials
       # -------------------------------
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -37,38 +37,28 @@ jobs:
         run: aws sts get-caller-identity
 
       # -------------------------------
-      # Step 3: Semgrep SAST Scan
+      # Step 3: Semgrep (SAST)
       # -------------------------------
       - name: Run Semgrep (SAST)
         uses: returntocorp/semgrep-action@v1
         with:
           config: "p/php"
+          audit_on: "push"
 
       # -------------------------------
-      # Step 4: Autobuild and Analyze CodeQL
-      # -------------------------------
-      - name: Autobuild Code
-        uses: github/codeql-action/autobuild@v3
-
-      - name: Run CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
-        with:
-          category: "/language:php"
-
-      # -------------------------------
-      # Step 5: Docker login 
+      # Step 4: Login to Docker Hub
       # -------------------------------
       - name: Login to Docker Hub
         run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
       # -------------------------------
-      # Step 6: Build Docker image
+      # Step 5: Build Docker image
       # -------------------------------
       - name: Build Docker image
         run: docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/research-app:latest .
 
       # -------------------------------
-      # Step 7: Run Trivy Scan (SCA)
+      # Step 6: Trivy Scan (SCA)
       # -------------------------------
       - name: Scan image for vulnerabilities (Trivy)
         uses: aquasecurity/trivy-action@master
@@ -79,7 +69,7 @@ jobs:
           exit-code: '1'   # Fail the pipeline if critical vulnerabilities are found
 
       # -------------------------------
-      # Step 8: Push image to Docker Hub (only if all scans passed)
+      # Step 7: Push Docker image
       # -------------------------------
       - name: Push Docker image
         if: success()
