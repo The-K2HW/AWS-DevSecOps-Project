@@ -125,6 +125,9 @@ resource "aws_lb_target_group" "app_tg" {
 ############################################
 
 resource "aws_lb" "app_alb" {
+  # trivy:ignore:AVD-AWS-0106
+  # justification: This ALB is intentionally public to serve HTTP/HTTPS traffic for the web application.
+
   name               = "${var.project_name}-alb"
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_sg.id]
