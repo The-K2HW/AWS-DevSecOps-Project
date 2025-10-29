@@ -137,6 +137,9 @@ jobs:
       # -------------------------------
       # Step 12: Run OWASP ZAP Full Scan manually
       # -------------------------------
+      - name: Fix workspace permissions for ZAP
+        run: sudo chmod -R 777 ${{ github.workspace }}
+        
       - name: Run OWASP ZAP Full Scan (manual Docker)
         run: |
           echo "Running ZAP full scan manually to avoid artifact upload bug..."
