@@ -115,3 +115,146 @@ jobs:
       - name: Push Docker image
         if: success()
         run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/research-app:latest
+
+      # -------------------------------
+      # Step 11: Start application container for DAST
+      # -------------------------------
+      - name: Start application container for DAST
+        run: |
+          echo " Starting PHP application for DAST..."
+          docker run -d --name test-app \
+            -p 8080:80 \
+            --health-cmd="curl -fs http://localhost:80 || exit 1" \
+            --health-interval=5s \
+            --health-timeout=3s \
+            --health-retries=10 \
+            ${{ secrets.DOCKERHUB_USERNAME }}/research-app:latest
+
+          echo " Waiting for the app to become healthy..."
+          timeout 60 bash -c 'until docker inspect --format="{{.State.Health.Status}}" test-app | grep -q "healthy"; do sleep 3; done'
+          echo " Application is ready for DAST scanning."
+
+      # -------------------------------
+      # Step 12: Run OWASP ZAP Full Scan
+      # -------------------------------
+      - name: Run OWASP ZAP Full Scan (DAST)
+        uses: zaproxy/action-full-scan@v0.10.0
+        with:
+          target: 'http://localhost:8080'
+          rules_file_name: '.zap/rules.tsv'
+          cmd_options: '-a -j -l WARN -T 30 -z "-config spider.maxDuration=5 -config ajaxSpider.maxDuration=3"'
+          fail_action: false
+          allow_issue_writing: false
+          artifact_name: 'zap-full-scan'
+        continue-on-error: true
+
+      # -------------------------------
+      # Step 13: Convert ZAP JSON to SARIF
+      # -------------------------------
+      - name: Convert ZAP JSON to SARIF format
+        if: always()
+        run: |
+          python3 <<'PYTHON_SCRIPT'
+          import json, os
+          if not os.path.exists("report_json.json"):
+              print(" No ZAP report found, creating empty SARIF")
+              empty = {"version": "2.1.0", "runs": [{"tool": {"driver": {"name": "OWASP ZAP"}}, "results": []}]}
+              json.dump(empty, open("zap-results.sarif", "w"), indent=2)
+              exit(0)
+
+          zap = json.load(open("report_json.json"))
+          risk_map = {"High": "error", "Medium": "warning", "Low": "note"}
+          rules, results = {}, []
+
+          for site in zap.get("site", []):
+              for alert in site.get("alerts", []):
+                  pid = str(alert.get("pluginid"))
+                  name = alert.get("name", "Unknown")
+                  risk = alert.get("riskdesc", "Low").split()[0]
+                  if pid not in rules:
+                      rules[pid] = {"id": pid, "name": name, "shortDescription": {"text": name}}
+                  for inst in alert.get("instances", []):
+                      results.append({
+                          "ruleId": pid,
+                          "level": risk_map.get(risk, "note"),
+                          "message": {"text": name},
+                          "locations": [{"physicalLocation": {"artifactLocation": {"uri": inst.get("uri", "")}}}]
+                      })
+
+          sarif = {
+              "version": "2.1.0",
+              "runs": [{
+                  "tool": {"driver": {"name": "OWASP ZAP", "rules": list(rules.values())}},
+                  "results": results
+              }]
+          }
+          json.dump(sarif, open("zap-results.sarif", "w"), indent=2)
+          print(f" SARIF created with {len(results)} findings.")
+          PYTHON_SCRIPT
+
+      # -------------------------------
+      # Step 14: Upload DAST results to GitHub Security Dashboard
+      # -------------------------------
+      - name: Upload ZAP SARIF results
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: zap-results.sarif
+          category: owasp-zap-dast
+        continue-on-error: true
+
+      # -------------------------------
+      # Step 15: Evaluate DAST severity
+      # -------------------------------
+      - name: Evaluate DAST severity
+        if: always()
+        id: eval-dast
+        run: |
+          if [ -f "report_json.json" ]; then
+            high=$(jq '[.site[].alerts[]? | select(.riskdesc | startswith("High"))] | length' report_json.json)
+            echo " High-risk vulnerabilities: $high"
+            echo "high=$high" >> $GITHUB_OUTPUT
+          else
+            echo " No DAST report found."
+            echo "high=0" >> $GITHUB_OUTPUT
+          fi
+
+      # -------------------------------
+      # Step 16: Upload ZAP Reports
+      # -------------------------------
+      - name: Upload ZAP reports as artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-dast-reports
+          path: |
+            report_html.html
+            report_json.json
+            zap-results.sarif
+          retention-days: 30
+
+      # -------------------------------
+      # Step 17: Cleanup test container
+      # -------------------------------
+      - name: Cleanup test container
+        if: always()
+        run: |
+          docker rm -f test-app || true
+          docker system prune -f || true
+          echo "Cleaned up test container."
+
+      # -------------------------------
+      # Step 18: Fail pipeline on high-risk vulnerabilities
+      # -------------------------------
+      - name: Fail pipeline on high-risk DAST vulnerabilities
+        if: ${{ steps.eval-dast.outputs.high != '0' }}
+        run: |
+          echo " HIGH-RISK DAST VULNERABILITIES DETECTED!"
+          echo "Found ${{ steps.eval-dast.outputs.high }} high-risk issues."
+          echo "Check artifacts and GitHub Security Dashboard."
+          exit 1
+
+        
+
+
+      
