@@ -34,6 +34,12 @@ resource "aws_instance" "bastion" {
 
   associate_public_ip_address = true
 
+    metadata_options {
+      http_tokens               = "required"     
+      http_endpoint             = "enabled"      
+      http_put_response_hop_limit = 1            
+  }
+
   tags = {
     Name = "${var.project_name}-bastion"
   }
