@@ -39,27 +39,20 @@ jobs:
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: config
-          scan-ref: ./infra        
+          scan-ref: ./infra
           format: 'sarif'
           output: 'tfsec-results.sarif'
           exit-code: '0'
           severity: 'HIGH,CRITICAL'
-          policy: './policy.rego'        
-          namespaces: 'trivy.ignore'    
+          policy: './policy.rego'
+          namespaces: 'trivy.ignore'
 
       # Upload IaC scan results
       - name: Upload Trivy IaC results to GitHub Security Dashboard
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: tfsec-results.sarif
-          category: trivy-iac    
-
-      # Upload Trivy image scan results
-      - name: Upload Trivy scan results to GitHub Security Dashboard
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: trivy-results.sarif
-          category: trivy-image  
+          category: trivy-iac            
 
       # -------------------------------
       # Step 4: Login to Docker Hub
@@ -95,6 +88,7 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-results.sarif
+          category: trivy-image          
 
       # -------------------------------
       # Step 8: Evaluate CRITICAL vulnerabilities
