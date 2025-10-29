@@ -135,18 +135,23 @@ jobs:
           echo "Application is ready for DAST scanning."
       
       # -------------------------------
-      # Step 12: Run OWASP ZAP Full Scan
+      # Step 12: Run OWASP ZAP Full Scan manually
       # -------------------------------
-      - name: Run OWASP ZAP Full Scan (DAST)
-        uses: zaproxy/action-full-scan@v0.10.0
-        with:
-          target: 'http://localhost:8080'
-          rules_file_name: '.zap/rules.tsv'
-          cmd_options: '-a -j -l WARN -T 30 -z "-config spider.maxDuration=5 -config ajaxSpider.maxDuration=3"'
-          fail_action: false
-          allow_issue_writing: false
-        continue-on-error: true
-      
+      - name: Run OWASP ZAP Full Scan (manual Docker)
+        run: |
+          echo "Running ZAP full scan manually to avoid artifact upload bug..."
+          docker run --rm -v $(pwd):/zap/wrk/:rw --network=host \
+            ghcr.io/zaproxy/zaproxy:stable zap-full-scan.py \
+            -t http://localhost:8080 \
+            -J report_json.json \
+            -w report_md.md \
+            -r report_html.html \
+            -a -j -l WARN -T 30 \
+            -z "-config spider.maxDuration=5 -config ajaxSpider.maxDuration=3"
+
+          echo "ZAP scan completed. Reports generated:"
+          ls -lh report_*
+
       # -------------------------------
       # Step 13: Convert ZAP JSON to SARIF
       # -------------------------------
@@ -219,7 +224,7 @@ jobs:
           fi
       
       # -------------------------------
-      # Step 16: Upload ZAP Reports (GitHub + DefectDojo)
+      # Step 16: Upload ZAP Reports (manual artifact upload)
       # -------------------------------
       - name: Upload ZAP reports as artifacts
         if: always()
@@ -229,6 +234,7 @@ jobs:
           path: |
             report_html.html
             report_json.json
+            report_md.md
             zap-results.sarif
           retention-days: 30
       
