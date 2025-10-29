@@ -149,6 +149,7 @@ jobs:
             -J report_json.json \
             -w report_md.md \
             -r report_html.html \
+            -I \
             -a -j -l WARN -T 30 \
             -z "-config spider.maxDuration=5 -config ajaxSpider.maxDuration=3"
 
