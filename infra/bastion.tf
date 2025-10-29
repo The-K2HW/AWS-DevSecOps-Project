@@ -40,7 +40,23 @@ resource "aws_instance" "bastion" {
       http_put_response_hop_limit = 1            
   }
 
+  root_block_device {
+    encrypted   = true
+    kms_key_id  = aws_kms_key.bastion_encryption_key.arn  
+    volume_size = 8                                      
+    volume_type = "gp3"
+  }
+
   tags = {
     Name = "${var.project_name}-bastion"
+  }
+}
+
+resource "aws_kms_key" "bastion_encryption_key" {
+  description             = "KMS key for encrypting Bastion EBS volumes"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+  tags = {
+    Name = "${var.project_name}-bastion-kms"
   }
 }
