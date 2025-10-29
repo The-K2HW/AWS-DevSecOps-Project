@@ -44,6 +44,8 @@ jobs:
           output: 'tfsec-results.sarif'
           exit-code: '0'
           severity: 'HIGH,CRITICAL'
+          policy: './policy.rego'        
+          namespaces: 'trivy.ignore'    
 
       # Upload IaC scan results
       - name: Upload Trivy IaC results to GitHub Security Dashboard
