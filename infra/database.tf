@@ -33,7 +33,7 @@ resource "aws_db_instance" "rds_instance" {
   skip_final_snapshot = true # to avoid snapshot cost on destroy
   deletion_protection = false
 
-
+  storage_encrypted = true
   backup_retention_period    = 7
   backup_window              = "03:00-04:00"
   copy_tags_to_snapshot      = true
