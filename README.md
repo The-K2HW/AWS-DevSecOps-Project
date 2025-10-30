@@ -19,7 +19,6 @@
     - [6.3. Infrastructure as Code (IaC) Security Scan](#63-infrastructure-as-code-iac-security-scan)  
     - [6.4. Software Composition Analysis (SCA)](#64-software-composition-analysis-sca)  
     - [6.5. Dynamic Application Security Testing (DAST)](#65-dynamic-application-security-testing-dast)  
-    - [6.6. Pipeline Results and Reporting](#66-pipeline-results-and-reporting)  
 
 ---
 
