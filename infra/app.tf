@@ -35,8 +35,8 @@ resource "aws_launch_template" "app_lt" {
   vpc_security_group_ids = [aws_security_group.ec2_sg.id]
 
   metadata_options {
-    http_tokens               = "required"  
-    http_endpoint             = "enabled"
+    http_tokens                 = "required"
+    http_endpoint               = "enabled"
     http_put_response_hop_limit = 1
   }
 
@@ -128,10 +128,10 @@ resource "aws_lb" "app_alb" {
   # trivy:ignore:AVD-AWS-0106
   # justification: This ALB is intentionally public to serve HTTP/HTTPS traffic for the web application.
 
-  name               = "${var.project_name}-alb"
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb_sg.id]
-  internal = false
+  name                       = "${var.project_name}-alb"
+  load_balancer_type         = "application"
+  security_groups            = [aws_security_group.alb_sg.id]
+  internal                   = false
   drop_invalid_header_fields = true
   subnets = [
     aws_subnet.public_a.id,

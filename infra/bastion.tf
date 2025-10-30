@@ -34,16 +34,16 @@ resource "aws_instance" "bastion" {
 
   associate_public_ip_address = true
 
-    metadata_options {
-      http_tokens               = "required"     
-      http_endpoint             = "enabled"      
-      http_put_response_hop_limit = 1            
+  metadata_options {
+    http_tokens                 = "required"
+    http_endpoint               = "enabled"
+    http_put_response_hop_limit = 1
   }
 
   root_block_device {
     encrypted   = true
-    kms_key_id  = aws_kms_key.bastion_encryption_key.arn  
-    volume_size = 8                                      
+    kms_key_id  = aws_kms_key.bastion_encryption_key.arn
+    volume_size = 8
     volume_type = "gp3"
   }
 
