@@ -27,10 +27,9 @@ jobs:
       # Step 2: Run Semgrep (SAST)
       # -------------------------------
       - name: Run Semgrep (SAST)
-        uses: returntocorp/semgrep-action@v1
+        uses: returntocorp/semgrep-action@v3
         with:
           config: "p/php"
-          audit_on: "push"
 
       # -------------------------------
       # Step 3: Run Trivy IaC Scan (Terraform security)
@@ -38,14 +37,13 @@ jobs:
       - name: Run Trivy IaC Scan (Terraform)
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: config
-          scan-ref: ./infra
+          scan-type: 'config'
+          scan-ref: './infra'
           format: 'sarif'
           output: 'tfsec-results.sarif'
           exit-code: '0'
           severity: 'HIGH,CRITICAL'
-          policy: './policy.rego'
-          namespaces: 'trivy.ignore'
+          ignore-policy: './policy.rego'  
 
       # Upload IaC scan results
       - name: Upload Trivy IaC results to GitHub Security Dashboard
