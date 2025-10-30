@@ -12,7 +12,14 @@
     - [4.3. Networking Layer](#43-networking-layer)  
     - [4.4. Security Boundaries](#44-security-boundaries)  
     - [4.5. Data Layer](#45-data-layer)  
-5. [Design Justifications](#design-justifications)
+5. [Design Justifications](#design-justifications)  
+6. [DevSecOps Security Pipeline](#devsecops-security-pipeline)  
+    - [6.1. Pipeline Overview](#61-pipeline-overview)  
+    - [6.2. Static Application Security Testing (SAST)](#62-static-application-security-testing-sast)  
+    - [6.3. Infrastructure as Code (IaC) Security Scan](#63-infrastructure-as-code-iac-security-scan)  
+    - [6.4. Software Composition Analysis (SCA)](#64-software-composition-analysis-sca)  
+    - [6.5. Dynamic Application Security Testing (DAST)](#65-dynamic-application-security-testing-dast)  
+    - [6.6. Pipeline Results and Reporting](#66-pipeline-results-and-reporting)  
 
 ---
 
@@ -27,19 +34,20 @@ The system hosts a **PHP-based research website** that allows users to query dev
 
 ## Capstone Project
 
-## 2.1. Existing Architecture
+### 2.1. Existing Architecture
 The original capstone project deployed a simple PHP application and MySQL database on a single EC2 instance within a public subnet:
 
 ![AWS 3-Tier Architecture](./assets/ExistingArchitecture.png)
 
-## 2.2. Problems with existing architecture
+### 2.2. Problems with existing architecture
 While the project is functional, the adopted architecture suffers from several security and scalability flaws:
-- The database and web server share the same EC2 instance, creating a single point of failure
-- The instance is hosted on a public subnet which means it's publicly accessible, exposing both the application and database to external threats
+- The database and web server share the same EC2 instance, creating a single point of failure.
+- The instance is hosted on a public subnet, exposing both the application and database to external threats.
 - No network segmentation exists between tiers.
-- Database credentials are stored in plaintext within the PHP application
+- Database credentials are stored in plaintext within the PHP application.
 - Manual provisioning is required, leading to configuration drift and human error.
 
+---
 
 ## Project Objectives
 
@@ -54,114 +62,65 @@ The main goals of this project are:
 
 ## Architectural Design
 
-## 4.1. Improved Architecture
-To address the issues with the existing architecture, this project redesigns the solution into a secure, automated and scalable **3-Tier Cloud Architecture** using AWS best practices:
+### 4.1. Improved Architecture
+To address the issues with the existing architecture, this project redesigns the solution into a secure, automated, and scalable **3-Tier Cloud Architecture** using AWS best practices:
 
 ![AWS 3-Tier Architecture](./assets/Architecture.png)
 
-The application consists of three primary tiers:
-
 | Tier | Components | Purpose |
 |------|-------------|----------|
-| **Presentation Tier (Web)** | Application Load Balancer (ALB), Bastion Host (Public Subnets), NAT Gateway | Handles all incoming HTTP traffic and provides secure administrative access. |
-| **Application Tier (Logic)** | EC2 Auto Scaling Group (Private Subnets), IAM Roles, Secrets Manager | Hosts the PHP application, retrieves credentials dynamically, and ensures horizontal scalability. |
-| **Data Tier (Storage)** | Amazon RDS MySQL (Private Subnets) | Stores research data, replicated across Availability Zones for high availability. |
+| **Presentation Tier (Web)** | Application Load Balancer (ALB), Bastion Host (Public Subnets), NAT Gateway | Handles incoming HTTP traffic and provides secure administrative access. |
+| **Application Tier (Logic)** | EC2 Auto Scaling Group (Private Subnets), IAM Roles, Secrets Manager | Hosts the PHP app, retrieves credentials dynamically, and scales horizontally. |
+| **Data Tier (Storage)** | Amazon RDS MySQL (Private Subnets) | Stores research data, replicated across AZs for high availability. |
 
-The new Archtiecture introduces : 
-- Network Isolation : Multiple public and private subnets
-- Load Balancing and autoscaling for the application tier
-- Secrets Manager for secure credential management
-- IAM lest privilege for all compute resources
-- Monitoring and logging via CloudWatch and GuardDuty
-- Terraform-based automation
+The new Architecture introduces:  
+- Network Isolation (public/private subnets)  
+- Load Balancing & Auto Scaling  
+- Secrets Manager integration  
+- IAM least privilege  
+- CloudWatch & GuardDuty monitoring  
+- Terraform automation  
 
 ---
 
 ### 4.2. System Components
-
 **Main AWS Components:**
-- **VPC (10.0.0.0/16)**: Defines an isolated network environment for all components.  
-- **Subnets:**  
-  - 2 Public subnets for ALB and Bastion Host.  
-  - 2 Private subnets for EC2 application instances.  
-  - 2 Private subnets for the RDS database.  
-- **Internet Gateway:** Enables external access through the ALB.  
-- **NAT Gateway:** Allows outbound internet access for private subnets (for updates or package installations).  
-- **Auto Scaling Group:** Maintains the desired number of EC2 instances based on demand.  
-- **Secrets Manager:** Stores and encrypts RDS credentials securely.  
-- **CloudWatch & GuardDuty:** Provide centralized monitoring and threat detection.  
-- **IAM Roles:** Enforce fine-grained access control to AWS services.
+- **VPC (10.0.0.0/16)** for isolation.  
+- **Subnets:** 2 public (ALB, Bastion), 2 private (EC2), 2 private (RDS).  
+- **Internet/NAT Gateways** for secure access.  
+- **Auto Scaling Group** for EC2 resilience.  
+- **Secrets Manager** for encrypted credentials.  
+- **CloudWatch & GuardDuty** for observability.  
+- **IAM Roles** for fine-grained access control.  
 
 ---
 
 ### 4.3. Networking Layer
-
-**Purpose:**  
-To establish a secure, highly available virtual network environment that isolates public and private resources.
-
-**Resources Implemented:**
-- One **VPC (10.0.0.0/16)** for isolation.  
-- Four **subnets** across two Availability Zones (public and private).  
-- **Internet Gateway** for outbound connectivity of public subnets.  
-- **Two NAT Gateways** for controlled outbound access from private subnets.  
-- **Route tables** separating public and private traffic.  
-
-**Justification:**  
-This configuration ensures that:
-- Only the ALB and Bastion Host are reachable from the internet.  
-- EC2 instances and the RDS database remain isolated in private subnets.  
-- Outbound connectivity for updates is possible through NAT gateways.  
-- High availability is achieved through multi-AZ deployment.
+Defines an isolated, multi-AZ network ensuring:  
+- Internet access only through the ALB and Bastion.  
+- EC2 and RDS fully private.  
+- High availability via redundant subnets and NAT gateways.  
 
 ---
 
 ### 4.4. Security Boundaries
+Implements layered protection:
+- **Security Groups:**  
+  - `alb_sg`: allows HTTP from internet.  
+  - `ec2_sg`: allows HTTP only from ALB.  
+  - `rds_sg`: allows MySQL only from EC2.  
+  Direction: Internet → ALB → EC2 → RDS.  
 
-**Purpose:**  
-To enforce network and identity boundaries that protect resources from unauthorized access.
-
-**Network-Level Security:**
-- **Three Security Groups** were created:
-  - `alb_sg`: allows inbound HTTP (port 80) from the internet.  
-  - `ec2_sg`: allows inbound HTTP (port 80) only from `alb_sg`.  
-  - `rds_sg`: allows inbound MySQL (port 3306) only from `ec2_sg`.  
-
-This directional rule set strictly limits data flow to:
-Internet → ALB → EC2 → RDS
-
-
-**Identity-Level Security:**
-- An **IAM Role** was defined for EC2 instances, attached via an **Instance Profile**.  
-- The role’s policy grants **read-only access to AWS Secrets Manager** and permission to describe RDS instances.  
-- This enables EC2 to retrieve credentials securely without hardcoding them.
-
-**Outcome:**
-- The EC2 servers can securely access only what they need.  
-- No public access to EC2 or RDS is possible.  
-- Credentials are never stored in code or Terraform files.
+- **IAM Role:**  
+  Read-only access to Secrets Manager, ensuring credentials are never hardcoded.  
 
 ---
 
 ### 4.5. Data Layer
-
-**Purpose:**  
-To provide a reliable and secure data storage service using **Amazon RDS (MySQL)** and manage its credentials via **AWS Secrets Manager**.
-
-**Resources Implemented:**
-- **RDS Subnet Group** using the private subnets created earlier.  
-- **RDS MySQL Instance** (`db.t3.micro`, MySQL 8.0).  
-- **Randomly generated password** using Terraform’s `random_password` resource.  
-- **Secrets Manager secret** storing username, password, host, port, and database name.  
-
-**Configuration Highlights:**
-- `publicly_accessible = false` ensures the database cannot be reached from the internet.  
-- Associated with `rds_sg` to allow only app-tier connections.  
-- Password generated dynamically and never exposed in plain text.  
-- Stored securely in Secrets Manager as JSON.
-
-**Outcome:**
-- Database credentials are encrypted, centrally managed, and retrievable only by authorized EC2 instances.  
-- The architecture ensures confidentiality and integrity of stored data.  
+Implements **Amazon RDS (MySQL)** with Secrets Manager-managed credentials:  
+- `publicly_accessible = false`  
+- Auto-generated password (Terraform `random_password`)  
+- Stored as encrypted JSON in Secrets Manager.  
 
 ---
 
@@ -169,11 +128,114 @@ To provide a reliable and secure data storage service using **Amazon RDS (MySQL)
 
 | Design Decision | Rationale |
 |-----------------|------------|
-| **3-Tier Architecture** | Improves separation of concerns, scalability, and security. |
-| **Private Subnets for EC2 and RDS** | Prevents direct public access and limits attack surface. |
-| **Security Groups per Layer** | Enforces directional traffic flow and network isolation. |
-| **IAM Role for EC2** | Enables secure API access without hardcoded credentials. |
-| **Secrets Manager Integration** | Centralized and encrypted credential storage. |
-| **Infrastructure as Code (Terraform)** | Guarantees consistency, repeatability, and easy rollback. |
-| **Multi-AZ Availability** | Provides redundancy and fault tolerance. |
+| **3-Tier Architecture** | Improves separation, scalability, and security. |
+| **Private Subnets** | Minimizes attack surface. |
+| **Security Groups per Layer** | Enforces directional data flow. |
+| **IAM Role for EC2** | Secure, temporary credential access. |
+| **Secrets Manager** | Centralized, encrypted credentials. |
+| **Terraform IaC** | Ensures consistency and version control. |
+| **Multi-AZ Deployment** | Fault-tolerant and highly available. |
+
+---
+
+## 6. DevSecOps Security Pipeline
+
+### 6.1. Pipeline Overview
+
+To strengthen security and automation, a **DevSecOps GitHub Actions pipeline** was implemented.  
+This pipeline automatically scans the application and infrastructure code for vulnerabilities before any deployment occurs.
+
+**Pipeline Name:** `Security Scan (SAST, SCA & IaC)`  
+**Execution Triggers:**  
+- On every push or pull request to `main` or `dev` branches.  
+- Can be triggered manually (`workflow_dispatch`).  
+
+![ GitHub Actions Security Pipeline Overview](./assets/PipeLineRun.jpeg)
+
+---
+
+### 6.2. Static Application Security Testing (SAST)
+
+**Tool Used:** [Semgrep](https://semgrep.dev/)  
+**Purpose:** Detect insecure code patterns and vulnerabilities in the PHP source code.  
+**Configuration:**  
+- `config: "p/php"` ensures PHP-specific security rules.  
+- Results automatically uploaded to GitHub Security Dashboard.
+
+📸 **Screenshot – Semgrep Scan Results**
+
+---
+
+### 6.3. Infrastructure as Code (IaC) Security Scan
+
+**Tool Used:** [Trivy IaC](https://github.com/aquasecurity/trivy)  
+**Purpose:** Scan Terraform configurations for misconfigurations and policy violations.  
+**Highlights:**  
+- Scans the `infra/` directory for AWS resource definitions.  
+- Detects public exposure, missing encryption, or overly permissive roles.  
+- Results exported in SARIF format for GitHub’s Security Dashboard.
+
+📸 **Screenshot – Terraform Security Scan Results (GitHub Actions Security Tab)**
+
+---
+
+### 6.4. Software Composition Analysis (SCA)
+
+**Tool Used:** [Trivy Image Scan]  
+**Purpose:** Analyze the Docker image for vulnerable OS packages and dependencies.  
+**Key Steps:**
+1. Builds the Docker image for the PHP research app.  
+2. Scans for known CVEs in system libraries and PHP packages.  
+3. Uploads results to GitHub Security Dashboard.  
+4. Pipeline fails automatically if **critical vulnerabilities** are found.  
+
+📸 **Screenshot – Trivy Docker Image Scan Results**  
+📸 **Screenshot – Docker Hub Repository (Image pushed after passing scan)**
+
+---
+
+### 6.5. Dynamic Application Security Testing (DAST)
+
+**Tool Used:** [OWASP ZAP (Zed Attack Proxy)]  
+**Purpose:** Perform runtime security testing on the deployed container to detect:  
+- XSS (Cross-Site Scripting)  
+- SQL Injection  
+- Missing headers / insecure cookies  
+- Exposed endpoints  
+
+**Execution Flow:**  
+1. Starts the PHP application container locally (`docker run -d -p 8080:80`).  
+2. Runs OWASP ZAP full scan via Docker.  
+3. Generates reports in JSON, Markdown, and HTML formats.  
+4. Converts ZAP JSON report into SARIF for GitHub integration.  
+5. Uploads artifacts and fails pipeline if high-risk vulnerabilities exist.
+
+📸 **Screenshot – OWASP ZAP HTML Report**  
+📸 **Screenshot – ZAP Scan Summary in GitHub Security Dashboard**
+
+---
+
+### 6.6. Pipeline Results and Reporting
+
+At the end of the workflow:
+- All security reports are uploaded to the **GitHub Security Dashboard**.  
+- OWASP ZAP and Trivy reports are also stored as **GitHub artifacts** (30-day retention).  
+- The pipeline automatically **fails** if:
+  - CRITICAL vulnerabilities found in SCA.  
+  - HIGH-risk vulnerabilities found in DAST.  
+
+This ensures **secure-by-default deployment**—no image or infrastructure change is promoted unless it passes all scans.
+
+📸 **Screenshot – Security Dashboard Summary View (SAST, IaC, SCA, DAST)**  
+
+---
+
+## References
+
+- AWS Well-Architected Framework  
+- Terraform Security Best Practices  
+- GitHub Actions Documentation  
+- OWASP ZAP Project  
+- Aqua Security Trivy Docs  
+- Semgrep Official Ruleset  
 

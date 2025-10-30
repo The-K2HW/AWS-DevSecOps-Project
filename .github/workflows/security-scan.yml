@@ -27,7 +27,7 @@ jobs:
       # Step 2: Run Semgrep (SAST)
       # -------------------------------
       - name: Run Semgrep (SAST)
-        uses: returntocorp/semgrep-action@v3
+        uses: returntocorp/semgrep-action@v1
         with:
           config: "p/php"
 
