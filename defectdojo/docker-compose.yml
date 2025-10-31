@@ -1,0 +1,142 @@
+
+services:
+  # Base de données PostgreSQL
+  postgres:
+    image: postgres:15-alpine
+    container_name: defectdojo-postgres
+    environment:
+      POSTGRES_DB: defectdojo
+      POSTGRES_USER: defectdojo
+      POSTGRES_PASSWORD: ${DD_DATABASE_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - defectdojo
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U defectdojo"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis pour le cache
+  redis:
+    image: redis:7-alpine
+    container_name: defectdojo-redis
+    networks:
+      - defectdojo
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # RabbitMQ pour la gestion des queues
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: defectdojo-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: defectdojo
+      RABBITMQ_DEFAULT_PASS: ${DD_RABBITMQ_PASSWORD}
+    networks:
+      - defectdojo
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Application DefectDojo (uWSGI)
+  uwsgi:
+    image: defectdojo/defectdojo-django:latest
+    container_name: defectdojo-uwsgi
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      DD_DEBUG: 'False'
+      DD_DATABASE_URL: postgresql://defectdojo:${DD_DATABASE_PASSWORD}@postgres:5432/defectdojo
+      DD_CELERY_BROKER_URL: amqp://defectdojo:${DD_RABBITMQ_PASSWORD}@rabbitmq:5672
+      DD_SECRET_KEY: ${DD_SECRET_KEY}
+      DD_CREDENTIAL_AES_256_KEY: ${DD_CREDENTIAL_AES_256_KEY}
+      DD_ALLOWED_HOSTS: ${DD_ALLOWED_HOSTS}
+      DD_INITIALIZE: 'true'
+      DD_ADMIN_USER: admin
+      DD_ADMIN_MAIL: ${DD_ADMIN_EMAIL}
+      DD_ADMIN_PASSWORD: ${DD_ADMIN_PASSWORD}
+      DD_SESSION_COOKIE_HTTPONLY: 'True'
+      DD_CSRF_COOKIE_HTTPONLY: 'True'
+      DD_SECURE_SSL_REDIRECT: 'False'
+      DD_SECURE_BROWSER_XSS_FILTER: 'True'
+      DD_TIME_ZONE: 'Europe/Paris'
+    volumes:
+      - media_data:/app/media
+    networks:
+      - defectdojo
+    restart: unless-stopped
+
+  # Celery Beat (Planificateur de tâches)
+  celerybeat:
+    image: defectdojo/defectdojo-django:latest
+    container_name: defectdojo-celerybeat
+    depends_on:
+      - uwsgi
+    environment:
+      DD_DATABASE_URL: postgresql://defectdojo:${DD_DATABASE_PASSWORD}@postgres:5432/defectdojo
+      DD_CELERY_BROKER_URL: amqp://defectdojo:${DD_RABBITMQ_PASSWORD}@rabbitmq:5672
+      DD_SECRET_KEY: ${DD_SECRET_KEY}
+      DD_CREDENTIAL_AES_256_KEY: ${DD_CREDENTIAL_AES_256_KEY}
+    command: celery -A dojo beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    networks:
+      - defectdojo
+    restart: unless-stopped
+
+  # Celery Worker (Traitement des tâches)
+  celeryworker:
+    image: defectdojo/defectdojo-django:latest
+    container_name: defectdojo-celeryworker
+    depends_on:
+      - uwsgi
+    environment:
+      DD_DATABASE_URL: postgresql://defectdojo:${DD_DATABASE_PASSWORD}@postgres:5432/defectdojo
+      DD_CELERY_BROKER_URL: amqp://defectdojo:${DD_RABBITMQ_PASSWORD}@rabbitmq:5672
+      DD_SECRET_KEY: ${DD_SECRET_KEY}
+      DD_CREDENTIAL_AES_256_KEY: ${DD_CREDENTIAL_AES_256_KEY}
+    command: celery -A dojo worker -l info --concurrency 3
+    volumes:
+      - media_data:/app/media
+    networks:
+      - defectdojo
+    restart: unless-stopped
+
+  # Nginx (Reverse Proxy)
+  nginx:
+    image: defectdojo/defectdojo-nginx:latest
+    container_name: defectdojo-nginx
+    depends_on:
+      - uwsgi
+    ports:
+      - "${DD_PORT:-8080}:8080"
+    environment:
+      NGINX_METRICS_ENABLED: 'false'
+    volumes:
+      - media_data:/usr/share/nginx/html/media
+    networks:
+      - defectdojo
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  media_data:
+    driver: local
+
+networks:
+  defectdojo:
+    driver: bridge

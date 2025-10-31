@@ -1,0 +1,48 @@
+# Environment variables
+.env
+.env.local
+.env.prod
+*.env
+
+# Docker volumes et données
+postgres-data/
+media/
+static/
+redis-data/
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Backups
+*.sql
+*.tar.gz
+*.zip
+backup/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+
+# Docker
+.dockerignore
