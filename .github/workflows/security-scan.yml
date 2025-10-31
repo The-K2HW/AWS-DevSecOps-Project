@@ -487,9 +487,7 @@ jobs:
             echo "$RESPONSE"
           fi
         continue-on-error: true   
-      # -------------------------------
-      # Step 15: Evaluate DAST severity
-      # -------------------------------
+
       - name: Evaluate DAST severity
         if: always()
         id: eval-dast
@@ -515,12 +513,29 @@ jobs:
             report_html.html
             report_json.json
             report_md.md
+            report_xml.xml
             zap-results.sarif
           retention-days: 30
-      
-      # -------------------------------
-      # Step 17: Cleanup test container
-      # -------------------------------
+          if-no-files-found: ignore
+
+      - name: Upload All Security Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports-${{ steps.metadata.outputs.commit_sha }}
+          path: |
+            semgrep.sarif
+            tfsec-results.sarif
+            trivy-results.json
+            trivy-results.sarif
+            report_html.html
+            report_json.json
+            report_md.md
+            report_xml.xml
+            zap-results.sarif
+          retention-days: 90
+          if-no-files-found: ignore      
+
       - name: Cleanup test container
         if: always()
         run: |
