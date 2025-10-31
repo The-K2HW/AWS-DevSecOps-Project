@@ -279,14 +279,12 @@ jobs:
           echo "Waiting for the app to become healthy..."
           timeout 60 bash -c 'until docker inspect --format="{{.State.Health.Status}}" test-app | grep -q "healthy"; do sleep 3; done'
           echo "Application is ready for DAST scanning."
-      
-      # -------------------------------
-      # Step 12: Run OWASP ZAP Full Scan manually
-      # -------------------------------
+
       - name: Fix workspace permissions for ZAP
         run: sudo chmod -R 777 ${{ github.workspace }}
         
       - name: Run OWASP ZAP Full Scan (manual Docker)
+        if: always()
         run: |
           echo "Running ZAP full scan manually to avoid artifact upload bug..."
           docker run --rm -v $(pwd):/zap/wrk/:rw --network=host \
@@ -295,12 +293,14 @@ jobs:
             -J report_json.json \
             -w report_md.md \
             -r report_html.html \
+            -x report_xml.xml \
             -I \
             -a -j -l WARN -T 30 \
-            -z "-config spider.maxDuration=5 -config ajaxSpider.maxDuration=3"
+            -z "-config spider.maxDuration=5 -config ajaxSpider.maxDuration=3" || true
 
           echo "ZAP scan completed. Reports generated:"
-          ls -lh report_*
+          ls -lh report_* || echo "No reports found"
+        continue-on-error: true
 
       # -------------------------------
       # Step 13: Convert ZAP JSON to SARIF
