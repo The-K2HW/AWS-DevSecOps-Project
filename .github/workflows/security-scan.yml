@@ -28,6 +28,7 @@ jobs:
       # -------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
+        
       - name: Set Scan Metadata
         id: metadata
         run: |
@@ -51,7 +52,45 @@ jobs:
         with:
           config: "p/php"
           audit_on: "push"
-
+          generateSarif: true
+        continue-on-error: true
+        
+      - name: Upload Semgrep to GitHub Security Dashboard
+        if: always() && hashFiles('semgrep.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep-sast
+        continue-on-error: true
+        
+       - name: Upload Semgrep to DefectDojo
+        if: always() && hashFiles('semgrep.sarif') != ''
+        run: |
+          echo "Uploading Semgrep results to DefectDojo..."
+          RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST "${DD_HOST}/api/v2/import-scan/" \
+            -H "Authorization: Token ${{ secrets.DD_API_TOKEN }}" \
+            -F "scan_type=Semgrep JSON Report" \
+            -F "file=@semgrep.sarif" \
+            -F "product_name=${PRODUCT_NAME}" \
+            -F "engagement_name=${{ steps.metadata.outputs.engagement_name }}" \
+            -F "scan_date=${{ steps.metadata.outputs.scan_date }}" \
+            -F "active=true" \
+            -F "verified=false" \
+            -F "close_old_findings=false" \
+            -F "test_title=Semgrep SAST - ${{ steps.metadata.outputs.commit_sha }}" \
+            -F "branch_tag=${{ steps.metadata.outputs.branch }}" \
+            -F "commit_hash=${{ github.sha }}" \
+            -F "build_id=${{ github.run_number }}")
+          
+          HTTP_CODE=$(echo "$RESPONSE" | grep -oP 'HTTP_CODE:\K\d+' || echo "0")
+          
+          if [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "200" ]; then
+            echo "Semgrep uploaded successfully to DefectDojo"
+          else
+            echo "Warning: Upload returned HTTP $HTTP_CODE"
+            echo "$RESPONSE"
+          fi
+        continue-on-error: true               
       # -------------------------------
       # Step 3: Run Trivy IaC Scan (Terraform security)
       # -------------------------------
