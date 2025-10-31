@@ -44,46 +44,49 @@ resource "aws_launch_template" "app_lt" {
   # User data for app servers
   # ==========================
   user_data = base64encode(<<-EOF
-        #!/bin/bash
-        set -xe
+      #!/bin/bash
+      set -xe
 
-        # 1. System updates & packages
-        dnf -y update --allowerasing
-        dnf -y install httpd php php-cli php-mysqlnd php-json git unzip amazon-ssm-agent --allowerasing
+      # Basic updates and packages
+      dnf -y update --allowerasing
+      dnf -y install httpd php php-cli php-mysqlnd php-json git unzip --allowerasing
 
-        # 2. Enable required services
-        systemctl enable amazon-ssm-agent
-        systemctl start amazon-ssm-agent
-        systemctl enable httpd
-        systemctl start httpd
+      # Install SSM Agent
+      dnf -y install amazon-ssm-agent
+      systemctl enable amazon-ssm-agent
+      systemctl start amazon-ssm-agent
 
-        # 3. Install Composer properly
-        curl -sS https://getcomposer.org/installer -o /tmp/composer-setup.php
-        php /tmp/composer-setup.php --install-dir=/usr/local/bin --filename=composer
-        export HOME=/root
+      # Enable and start Apache
+      systemctl enable httpd
+      systemctl start httpd
 
-        # 4. Deploy PHP app from GitHub
-        cd /var/www
-        rm -rf html
-        mkdir -p html
-        cd /var/www/html
+      # Install Composer
+      export HOME=/root
+      curl -sS https://getcomposer.org/installer -o /tmp/composer-setup.php
+      php /tmp/composer-setup.php --install-dir=/usr/local/bin --filename=composer
+          
+      # Deploy application
+      cd /var/www
+      rm -rf html
+      mkdir -p html
+      cd /var/www/html
 
-        # Clone latest version of app
-        git clone --branch ${var.app_repo_branch} ${var.app_repo_url} /tmp/app
+      # Pull your app from GitHub
+      git clone --branch ${var.app_repo_branch} ${var.app_repo_url} /tmp/app
+      cp -r /tmp/app/app/* /var/www/html/
+      cd /var/www/html
+      
+      # Install AWS SDK with HOME set
+      export HOME=/root
+      composer require aws/aws-sdk-php --no-progress --no-interaction
 
-        # Copy app contents
-        cp -r /tmp/app/app/* /var/www/html/
+      # Permissions for Apache
+      chown -R apache:apache /var/www/html
+      find /var/www/html -type d -exec chmod 755 {} \\;
+      find /var/www/html -type f -exec chmod 644 {} \\;
 
-        # Install AWS SDK dependency
-        composer require aws/aws-sdk-php --no-progress --no-interaction
-
-        # 5. Set correct permissions
-        chown -R apache:apache /var/www/html
-        find /var/www/html -type d -exec chmod 755 {} \\;
-        find /var/www/html -type f -exec chmod 644 {} \\;
-
-        # 6. Restart Apache to finalize setup
-        systemctl restart httpd
+      # Restart Apache after deployment
+      systemctl restart httpd
   EOF
   )
 
