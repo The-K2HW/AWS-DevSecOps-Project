@@ -255,7 +255,11 @@ jobs:
       # -------------------------------
       - name: Push Docker image
         if: success()
-        run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/research-app:latest
+        run: |
+          echo "Pushing Docker image to registry..."
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/research-app:${{ steps.metadata.outputs.commit_sha }}
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/research-app:latest
+          echo "Image pushed successfully"
 
       # -------------------------------
       # Step 11: Start application container for DAST
