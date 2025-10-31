@@ -1,4 +1,4 @@
-name: Security Scan (SAST, SCA & IaC)
+name: Security Scan 
 
 on:
   push:
@@ -48,11 +48,29 @@ jobs:
           echo "  Branch: ${GITHUB_REF#refs/heads/}"
           echo "  Commit: $(git rev-parse --short HEAD)"
           echo "  Engagement: $ENGAGEMENT"
+
+      # Install Semgrep for JSON output
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          
+      - name: Install Semgrep
+        run: |
+          pip install semgrep
+          semgrep --version
           	
       # -------------------------------
-      # PHASE 2: STATIC ANALYSIS
+      # PHASE 2: STATIC ANALYSIS (SAST)
       # -------------------------------
-      - name: Run Semgrep (SAST)
+      - name: Run Semgrep (SAST) - Generate JSON for DefectDojo
+        run: |
+          echo "Running Semgrep scan..."
+          semgrep --config=p/php --json --output=semgrep.json . || true
+          echo "Semgrep JSON report generated"
+        continue-on-error: true
+        
+      - name: Run Semgrep (SAST) - Generate SARIF for GitHub
         uses: returntocorp/semgrep-action@v1
         with:
           config: "p/php"
@@ -69,13 +87,16 @@ jobs:
         continue-on-error: true
         
       - name: Upload Semgrep to DefectDojo
-        if: always() && hashFiles('semgrep.sarif') != ''
+        if: always() && hashFiles('semgrep.json') != ''
         run: |
-          echo "Uploading Semgrep results to DefectDojo..."
+          echo "=== Uploading Semgrep results to DefectDojo ==="
+          echo "File: semgrep.json"
+          echo "Size: $(ls -lh semgrep.json | awk '{print $5}')"
+          
           RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST "${DD_HOST}/api/v2/import-scan/" \
             -H "Authorization: Token ${{ secrets.DD_API_TOKEN }}" \
             -F "scan_type=Semgrep JSON Report" \
-            -F "file=@semgrep.sarif" \
+            -F "file=@semgrep.json" \
             -F "product_name=${PRODUCT_NAME}" \
             -F "engagement_name=${{ steps.metadata.outputs.engagement_name }}" \
             -F "scan_date=${{ steps.metadata.outputs.scan_date }}" \
@@ -88,17 +109,23 @@ jobs:
             -F "build_id=${{ github.run_number }}")
           
           HTTP_CODE=$(echo "$RESPONSE" | grep -oP 'HTTP_CODE:\K\d+' || echo "0")
+          RESPONSE_BODY=$(echo "$RESPONSE" | sed 's/HTTP_CODE:.*//')
+          
+          echo "=== Response ==="
+          echo "HTTP Code: $HTTP_CODE"
+          echo "Response: $RESPONSE_BODY"
           
           if [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "200" ]; then
-            echo "Semgrep uploaded successfully to DefectDojo"
+            echo "✓ Semgrep uploaded successfully to DefectDojo"
           else
-            echo "Warning: Upload returned HTTP $HTTP_CODE"
-            echo "$RESPONSE"
+            echo "✗ Upload failed with HTTP $HTTP_CODE"
+            echo "Full response: $RESPONSE"
+            exit 1
           fi
         continue-on-error: true
 
       # -------------------------------
-      # PHASE 3: INFRASTRUCTURE SECURITY
+      # PHASE 3: INFRASTRUCTURE SECURITY (IaC)
       # -------------------------------
       - name: Run Trivy IaC Scan (Terraform)
         uses: aquasecurity/trivy-action@master
@@ -109,8 +136,6 @@ jobs:
           output: 'tfsec-results.sarif'
           exit-code: '0'
           severity: 'HIGH,CRITICAL'
-          policy: './policy.rego'
-          namespaces: 'trivy.ignore'
         continue-on-error: true
 
       - name: Upload Trivy IaC results to GitHub Security Dashboard
@@ -124,7 +149,10 @@ jobs:
       - name: Upload Trivy IaC to DefectDojo
         if: always() && hashFiles('tfsec-results.sarif') != ''
         run: |
-          echo "Uploading Trivy IaC results to DefectDojo..."
+          echo "=== Uploading Trivy IaC results to DefectDojo ==="
+          echo "File: tfsec-results.sarif"
+          echo "Size: $(ls -lh tfsec-results.sarif | awk '{print $5}')"
+          
           RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST "${DD_HOST}/api/v2/import-scan/" \
             -H "Authorization: Token ${{ secrets.DD_API_TOKEN }}" \
             -F "scan_type=Trivy Scan" \
@@ -139,12 +167,17 @@ jobs:
             -F "commit_hash=${{ github.sha }}")
           
           HTTP_CODE=$(echo "$RESPONSE" | grep -oP 'HTTP_CODE:\K\d+' || echo "0")
+          RESPONSE_BODY=$(echo "$RESPONSE" | sed 's/HTTP_CODE:.*//')
+          
+          echo "=== Response ==="
+          echo "HTTP Code: $HTTP_CODE"
+          echo "Response: $RESPONSE_BODY"
           
           if [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "200" ]; then
-            echo "Trivy IaC uploaded successfully to DefectDojo"
+            echo "✓ Trivy IaC uploaded successfully to DefectDojo"
           else
-            echo "Warning: Upload returned HTTP $HTTP_CODE"
-            echo "$RESPONSE"
+            echo "✗ Upload failed with HTTP $HTTP_CODE"
+            exit 1
           fi
         continue-on-error: true
 
@@ -163,7 +196,7 @@ jobs:
           echo "Image built successfully"
 
       # -------------------------------
-      # PHASE 5: CONTAINER SECURITY
+      # PHASE 5: CONTAINER SECURITY (SCA)
       # -------------------------------
       - name: Run Trivy vulnerability scan
         uses: aquasecurity/trivy-action@master
@@ -200,7 +233,10 @@ jobs:
       - name: Upload Trivy Image to DefectDojo
         if: always() && hashFiles('trivy-results.json') != ''
         run: |
-          echo "Uploading Trivy Container scan results to DefectDojo..."
+          echo "=== Uploading Trivy Container scan results to DefectDojo ==="
+          echo "File: trivy-results.json"
+          echo "Size: $(ls -lh trivy-results.json | awk '{print $5}')"
+          
           RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST "${DD_HOST}/api/v2/import-scan/" \
             -H "Authorization: Token ${{ secrets.DD_API_TOKEN }}" \
             -F "scan_type=Trivy Scan" \
@@ -215,12 +251,17 @@ jobs:
             -F "commit_hash=${{ github.sha }}")
           
           HTTP_CODE=$(echo "$RESPONSE" | grep -oP 'HTTP_CODE:\K\d+' || echo "0")
+          RESPONSE_BODY=$(echo "$RESPONSE" | sed 's/HTTP_CODE:.*//')
+          
+          echo "=== Response ==="
+          echo "HTTP Code: $HTTP_CODE"
+          echo "Response: $RESPONSE_BODY"
           
           if [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "200" ]; then
-            echo "Trivy Container scan uploaded successfully to DefectDojo"
+            echo "✓ Trivy Container scan uploaded successfully to DefectDojo"
           else
-            echo "Warning: Upload returned HTTP $HTTP_CODE"
-            echo "$RESPONSE"
+            echo "✗ Upload failed with HTTP $HTTP_CODE"
+            exit 1
           fi
         continue-on-error: true
 
@@ -262,7 +303,7 @@ jobs:
           echo "Image pushed successfully"
 
       # -------------------------------
-      # PHASE 7: DYNAMIC TESTING
+      # PHASE 7: DYNAMIC TESTING (DAST)
       # -------------------------------
       - name: Start application container for DAST
         if: success() || failure()
@@ -283,10 +324,10 @@ jobs:
       - name: Fix workspace permissions for ZAP
         run: sudo chmod -R 777 ${{ github.workspace }}
         
-      - name: Run OWASP ZAP Full Scan (manual Docker)
+      - name: Run OWASP ZAP Full Scan
         if: always()
         run: |
-          echo "Running ZAP full scan manually to avoid artifact upload bug..."
+          echo "Running ZAP full scan..."
           docker run --rm -v $(pwd):/zap/wrk/:rw --network=host \
             ghcr.io/zaproxy/zaproxy:stable zap-full-scan.py \
             -t http://localhost:8080 \
@@ -384,16 +425,21 @@ jobs:
       - name: Upload ZAP to DefectDojo
         if: always() && (hashFiles('report_xml.xml') != '' || hashFiles('report_json.json') != '')
         run: |
-          echo "Uploading ZAP results to DefectDojo..."
+          echo "=== Uploading ZAP results to DefectDojo ==="
           
           if [ -f "report_xml.xml" ]; then
             FILE_TO_UPLOAD="report_xml.xml"
+            echo "Using XML format"
           elif [ -f "report_json.json" ]; then
             FILE_TO_UPLOAD="report_json.json"
+            echo "Using JSON format"
           else
             echo "No ZAP report file found to upload"
             exit 0
           fi
+          
+          echo "File: $FILE_TO_UPLOAD"
+          echo "Size: $(ls -lh $FILE_TO_UPLOAD | awk '{print $5}')"
           
           RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST "${DD_HOST}/api/v2/import-scan/" \
             -H "Authorization: Token ${{ secrets.DD_API_TOKEN }}" \
@@ -409,12 +455,17 @@ jobs:
             -F "commit_hash=${{ github.sha }}")
           
           HTTP_CODE=$(echo "$RESPONSE" | grep -oP 'HTTP_CODE:\K\d+' || echo "0")
+          RESPONSE_BODY=$(echo "$RESPONSE" | sed 's/HTTP_CODE:.*//')
+          
+          echo "=== Response ==="
+          echo "HTTP Code: $HTTP_CODE"
+          echo "Response: $RESPONSE_BODY"
           
           if [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "200" ]; then
-            echo "ZAP results uploaded successfully to DefectDojo"
+            echo "✓ ZAP results uploaded successfully to DefectDojo"
           else
-            echo "Warning: Upload returned HTTP $HTTP_CODE"
-            echo "$RESPONSE"
+            echo "✗ Upload failed with HTTP $HTTP_CODE"
+            exit 1
           fi
         continue-on-error: true
 
@@ -454,6 +505,7 @@ jobs:
         with:
           name: security-reports-${{ steps.metadata.outputs.commit_sha }}
           path: |
+            semgrep.json
             semgrep.sarif
             tfsec-results.sarif
             trivy-results.json
@@ -494,9 +546,9 @@ jobs:
           cat > $GITHUB_STEP_SUMMARY << EOF
           # Security Scan Summary
           
-          **Engagement:** `${{ steps.metadata.outputs.engagement_name }}`  
-          **Branch:** `${{ steps.metadata.outputs.branch }}`  
-          **Commit:** `${{ steps.metadata.outputs.commit_sha }}`  
+          **Engagement:** \`${{ steps.metadata.outputs.engagement_name }}\`  
+          **Branch:** \`${{ steps.metadata.outputs.branch }}\`  
+          **Commit:** \`${{ steps.metadata.outputs.commit_sha }}\`  
           **Date:** ${{ steps.metadata.outputs.scan_date }} ${{ steps.metadata.outputs.scan_time }}
           
           ## Scan Results
@@ -510,20 +562,20 @@ jobs:
           
           ## Quick Links
           
-          - [DefectDojo Dashboard](${DD_HOST}/product)
+          - [DefectDojo Dashboard](${DD_HOST}/product/1)
           - [GitHub Security Tab](https://github.com/${{ github.repository }}/security/code-scanning)
           - [Workflow Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
           
           ## Action Required
           
           $(if [ "${{ steps.eval.outputs.critical }}" != "0" ]; then
-            echo "- CRITICAL: Fix ${{ steps.eval.outputs.critical }} critical vulnerabilities immediately"
+            echo "**CRITICAL**: Fix ${{ steps.eval.outputs.critical }} critical vulnerabilities immediately"
           fi)
           $(if [ "${{ steps.eval-dast.outputs.high }}" != "0" ]; then
-            echo "- HIGH: Address ${{ steps.eval-dast.outputs.high }} high-risk DAST issues"
+            echo "**HIGH**: Address ${{ steps.eval-dast.outputs.high }} high-risk DAST issues"
           fi)
           $(if [ "${{ steps.eval.outputs.critical }}" = "0" ] && [ "${{ steps.eval-dast.outputs.high }}" = "0" ]; then
-            echo "- No critical or high-risk issues detected"
+            echo "No critical or high-risk issues detected"
           fi)
           
           ---
