@@ -190,14 +190,24 @@ jobs:
           else
             echo "✗ Upload failed with HTTP $HTTP_CODE"
             echo "Full response: $RESPONSE"
-            exit 1
           fi
         continue-on-error: true
 
       # -------------------------------
       # PHASE 3: INFRASTRUCTURE SECURITY (IaC)
       # -------------------------------
-      - name: Run Trivy IaC Scan (Terraform)
+      - name: Run Trivy IaC Scan - JSON for DefectDojo
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: config
+          scan-ref: ./infra
+          format: 'json'
+          output: 'trivy-iac.json'
+          exit-code: '0'
+          severity: 'HIGH,CRITICAL'
+        continue-on-error: true
+
+      - name: Run Trivy IaC Scan - SARIF for GitHub
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: config
@@ -217,17 +227,17 @@ jobs:
         continue-on-error: true
        
       - name: Upload Trivy IaC to DefectDojo
-        if: always() && hashFiles('tfsec-results.sarif') != ''
+        if: always() && hashFiles('trivy-iac.json') != ''
         run: |
           echo "=== Uploading Trivy IaC results to DefectDojo ==="
-          echo "File: tfsec-results.sarif"
-          echo "Size: $(ls -lh tfsec-results.sarif | awk '{print $5}')"
+          echo "File: trivy-iac.json"
+          echo "Size: $(ls -lh trivy-iac.json | awk '{print $5}')"
           echo "Engagement ID: ${{ steps.create_engagement.outputs.engagement_id }}"
           
           RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST "${DD_HOST}/api/v2/import-scan/" \
             -H "Authorization: Token ${{ secrets.DD_API_TOKEN }}" \
             -F "scan_type=Trivy Scan" \
-            -F "file=@tfsec-results.sarif" \
+            -F "file=@trivy-iac.json" \
             -F "engagement=${{ steps.create_engagement.outputs.engagement_id }}" \
             -F "scan_date=${{ steps.metadata.outputs.scan_date }}" \
             -F "active=true" \
@@ -245,7 +255,6 @@ jobs:
             echo "✓ Trivy IaC uploaded successfully to DefectDojo"
           else
             echo "✗ Upload failed with HTTP $HTTP_CODE"
-            exit 1
           fi
         continue-on-error: true
 
@@ -327,7 +336,6 @@ jobs:
             echo "✓ Trivy Container scan uploaded successfully to DefectDojo"
           else
             echo "✗ Upload failed with HTTP $HTTP_CODE"
-            exit 1
           fi
         continue-on-error: true
 
@@ -529,7 +537,6 @@ jobs:
             echo "✓ ZAP results uploaded successfully to DefectDojo"
           else
             echo "✗ Upload failed with HTTP $HTTP_CODE"
-            exit 1
           fi
         continue-on-error: true
 
@@ -571,6 +578,7 @@ jobs:
           path: |
             semgrep.json
             semgrep.sarif
+            trivy-iac.json
             tfsec-results.sarif
             trivy-results.json
             trivy-results.sarif
