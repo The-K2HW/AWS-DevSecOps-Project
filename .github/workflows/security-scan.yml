@@ -491,7 +491,7 @@ jobs:
       - name: Generate Summary Report
         if: always()
         run: |
-          cat > $GITHUB_STEP_SUMMARY << 'EOF'
+          cat > $GITHUB_STEP_SUMMARY << EOF
           # Security Scan Summary
           
           **Engagement:** `${{ steps.metadata.outputs.engagement_name }}`  
