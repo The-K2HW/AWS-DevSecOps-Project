@@ -144,34 +144,17 @@ resource "aws_lb" "app_alb" {
 }
 
 ############################################
-# HTTPS Listener and HTTP redirect
+# HTTP Listener
 ############################################
 
-resource "aws_lb_listener" "https_listener" {
-  load_balancer_arn = aws_lb.app_alb.arn
-  port              = 443
-  protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-  certificate_arn   = "arn:aws:acm:us-east-1:430286381815:certificate/71066e24-9cc8-4962-80a8-42b816690c07"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.app_tg.arn
-  }
-}
-
-resource "aws_lb_listener" "http_redirect" {
+resource "aws_lb_listener" "http_listener" {
   load_balancer_arn = aws_lb.app_alb.arn
   port              = 80
   protocol          = "HTTP"
 
   default_action {
-    type = "redirect"
-    redirect {
-      port        = "443"
-      protocol    = "HTTPS"
-      status_code = "HTTP_301"
-    }
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.app_tg.arn
   }
 }
 
@@ -185,8 +168,8 @@ resource "aws_autoscaling_group" "app_asg" {
   min_size         = 1
   desired_capacity = 1
   vpc_zone_identifier = [
-    aws_subnet.public_a.id,
-    aws_subnet.public_b.id
+    aws_subnet.private_a.id,
+    aws_subnet.private_b.id
   ]
 
   health_check_type         = "EC2"
