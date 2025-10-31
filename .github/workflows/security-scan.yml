@@ -1,4 +1,4 @@
-name: Security Scan
+name: Security Scan 
 
 on:
   push:
@@ -70,15 +70,31 @@ jobs:
           echo "Product: ${PRODUCT_NAME}"
           echo "Engagement: ${{ steps.metadata.outputs.engagement_name }}"
           
-          # First, get the product ID
-          PRODUCT_RESPONSE=$(curl -s -X GET "${DD_HOST}/api/v2/products/?name=${PRODUCT_NAME}" \
+          # First, get the product ID - encode the product name for URL
+          ENCODED_PRODUCT_NAME=$(echo "${PRODUCT_NAME}" | sed 's/ /%20/g')
+          PRODUCT_RESPONSE=$(curl -s -X GET "${DD_HOST}/api/v2/products/?name=${ENCODED_PRODUCT_NAME}" \
             -H "Authorization: Token ${{ secrets.DD_API_TOKEN }}")
+          
+          echo "Product API Response: $PRODUCT_RESPONSE"
           
           PRODUCT_ID=$(echo "$PRODUCT_RESPONSE" | jq -r '.results[0].id // empty')
           
           if [ -z "$PRODUCT_ID" ]; then
-            echo "Error: Product '${PRODUCT_NAME}' not found in DefectDojo"
-            exit 1
+            echo "Warning: Product lookup by name failed. Trying to get all products..."
+            ALL_PRODUCTS=$(curl -s -X GET "${DD_HOST}/api/v2/products/" \
+              -H "Authorization: Token ${{ secrets.DD_API_TOKEN }}")
+            
+            echo "All Products: $ALL_PRODUCTS"
+            
+            # Try to find product by name in the list
+            PRODUCT_ID=$(echo "$ALL_PRODUCTS" | jq -r ".results[] | select(.name==\"${PRODUCT_NAME}\") | .id // empty" | head -1)
+            
+            if [ -z "$PRODUCT_ID" ]; then
+              echo "Error: Product '${PRODUCT_NAME}' not found in DefectDojo"
+              echo "Available products:"
+              echo "$ALL_PRODUCTS" | jq -r '.results[].name'
+              exit 1
+            fi
           fi
           
           echo "Product ID: $PRODUCT_ID"
