@@ -302,9 +302,76 @@ jobs:
           ls -lh report_* || echo "No reports found"
         continue-on-error: true
 
-      # -------------------------------
-      # Step 13: Convert ZAP JSON to SARIF
-      # -------------------------------
+      - name: Convert ZAP JSON to SARIF format
+        if: always()
+        run: |
+          python3 <<'PYTHON_SCRIPT'
+          import json, os
+      
+          if not os.path.exists("report_json.json"):
+              print("No ZAP report found, creating empty SARIF")
+              empty = {
+                  "version": "2.1.0",
+                  "runs": [{
+                      "tool": {"driver": {"name": "OWASP ZAP"}},
+                      "results": []
+                  }]
+              }
+              json.dump(empty, open("zap-results.sarif", "w"), indent=2)
+              exit(0)
+      
+          zap = json.load(open("report_json.json"))
+          risk_map = {"High": "error", "Medium": "warning", "Low": "note", "Informational": "note"}
+          rules, results = {}, []
+      
+          os.makedirs("zap_scan", exist_ok=True)
+      
+          for site in zap.get("site", []):
+              for alert in site.get("alerts", []):
+                  pid = str(alert.get("pluginid"))
+                  name = alert.get("name", "Unknown")
+                  risk = alert.get("riskdesc", "Low").split()[0]
+      
+                  if pid not in rules:
+                      rules[pid] = {
+                          "id": pid,
+                          "name": name,
+                          "shortDescription": {"text": name}
+                      }
+      
+                  for inst in alert.get("instances", []):
+                      uri = inst.get("uri", "unknown")
+                      file_path = "zap_scan/" + os.path.basename(uri)
+      
+                      results.append({
+                          "ruleId": pid,
+                          "level": risk_map.get(risk, "note"),
+                          "message": {"text": name},
+                          "locations": [{
+                              "physicalLocation": {
+                                  "artifactLocation": {
+                                      "uri": file_path,
+                                      "uriBaseId": "PROJECTROOT"
+                                  }
+                              }
+                          }]
+                      })
+      
+          sarif = {
+              "version": "2.1.0",
+              "runs": [{
+                  "tool": {"driver": {
+                      "name": "OWASP ZAP",
+                      "rules": list(rules.values())
+                  }},
+                  "results": results
+              }]
+          }
+      
+          json.dump(sarif, open("zap-results.sarif", "w"), indent=2)
+          print(f"SARIF created with {len(results)} findings.")
+          PYTHON_SCRIPT
+        continue-on-error: true
       - name: Convert ZAP JSON to SARIF format
         if: always()
         run: |
@@ -419,7 +486,7 @@ jobs:
             echo "Warning: Upload returned HTTP $HTTP_CODE"
             echo "$RESPONSE"
           fi
-        continue-on-error: true      
+        continue-on-error: true   
       # -------------------------------
       # Step 15: Evaluate DAST severity
       # -------------------------------
