@@ -6,7 +6,9 @@ on:
   pull_request:
     branches: [ main, dev ]
   workflow_dispatch:
-
+  schedule:
+    - cron: '0 2 * * 1'
+    
 permissions:
   contents: read
   security-events: write
@@ -21,6 +23,7 @@ jobs:
   security-scan:
     name: Security Scan Pipeline
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
       # -------------------------------
@@ -536,6 +539,9 @@ jobs:
           retention-days: 90
           if-no-files-found: ignore      
 
+      # -------------------------------
+      # PHASE 9: CLEANUP
+      # -------------------------------
       - name: Cleanup test container
         if: always()
         run: |
@@ -552,6 +558,9 @@ jobs:
           echo "Review findings in DefectDojo: ${DD_HOST}"
           exit 1
 
+      # -------------------------------
+      # PHASE 10: Summary Report
+      # -------------------------------
       - name: Generate Summary Report
         if: always()
         run: |
