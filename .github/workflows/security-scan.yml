@@ -324,7 +324,7 @@ jobs:
               exit(0)
       
           zap = json.load(open("report_json.json"))
-          risk_map = {"High": "error", "Medium": "warning", "Low": "note"}
+          risk_map = {"High": "error", "Medium": "warning", "Low": "note", "Informational": "note"}
           rules, results = {}, []
       
           os.makedirs("zap_scan", exist_ok=True)
@@ -374,19 +374,52 @@ jobs:
           json.dump(sarif, open("zap-results.sarif", "w"), indent=2)
           print(f"SARIF created with {len(results)} findings.")
           PYTHON_SCRIPT
-
-      
-      # -------------------------------
-      # Step 14: Upload DAST results to GitHub Security Dashboard
-      # -------------------------------
+        continue-on-error: true      
+        
       - name: Upload ZAP SARIF results
-        if: always()
+        if: always() && hashFiles('zap-results.sarif') != ''
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: zap-results.sarif
           category: owasp-zap-dast
         continue-on-error: true
-      
+
+      - name: Upload ZAP to DefectDojo
+        if: always() && (hashFiles('report_xml.xml') != '' || hashFiles('report_json.json') != '')
+        run: |
+          echo "Uploading ZAP results to DefectDojo..."
+          
+          if [ -f "report_xml.xml" ]; then
+            FILE_TO_UPLOAD="report_xml.xml"
+          elif [ -f "report_json.json" ]; then
+            FILE_TO_UPLOAD="report_json.json"
+          else
+            echo "No ZAP report file found to upload"
+            exit 0
+          fi
+          
+          RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST "${DD_HOST}/api/v2/import-scan/" \
+            -H "Authorization: Token ${{ secrets.DD_API_TOKEN }}" \
+            -F "scan_type=ZAP Scan" \
+            -F "file=@${FILE_TO_UPLOAD}" \
+            -F "product_name=${PRODUCT_NAME}" \
+            -F "engagement_name=${{ steps.metadata.outputs.engagement_name }}" \
+            -F "scan_date=${{ steps.metadata.outputs.scan_date }}" \
+            -F "active=true" \
+            -F "verified=false" \
+            -F "test_title=OWASP ZAP DAST - ${{ steps.metadata.outputs.commit_sha }}" \
+            -F "branch_tag=${{ steps.metadata.outputs.branch }}" \
+            -F "commit_hash=${{ github.sha }}")
+          
+          HTTP_CODE=$(echo "$RESPONSE" | grep -oP 'HTTP_CODE:\K\d+' || echo "0")
+          
+          if [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "200" ]; then
+            echo "ZAP results uploaded successfully to DefectDojo"
+          else
+            echo "Warning: Upload returned HTTP $HTTP_CODE"
+            echo "$RESPONSE"
+          fi
+        continue-on-error: true      
       # -------------------------------
       # Step 15: Evaluate DAST severity
       # -------------------------------
