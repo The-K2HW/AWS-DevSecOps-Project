@@ -164,25 +164,66 @@ jobs:
         with:
           image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/research-app:latest
           format: 'sarif'
-          output: 'trivy-results.sarif'
+          output: 'trivy-results.json'
           ignore-unfixed: true
           vuln-type: 'os,library'
-          scanners: 'vuln,secret'
-          severity: 'HIGH,CRITICAL'
+          scanners: 'vuln,secret,config'
+          severity: 'UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL'
           exit-code: '0'
+        continue-on-error: true
 
-      # -------------------------------
-      # Step 7: Upload Trivy results to GitHub Security Dashboard
-      # -------------------------------
+      - name: Convert Trivy JSON to SARIF
+        if: always() && hashFiles('trivy-results.json') != ''
+        run: |
+          echo "Converting Trivy JSON to SARIF format..."
+          docker run --rm -v $(pwd):/data aquasec/trivy convert \
+            --format sarif \
+            --output /data/trivy-results.sarif \
+            /data/trivy-results.json
+          echo "Conversion complete"
+        continue-on-error: true
+
+      - name: Upload Trivy scan results to GitHub Security Dashboard
+        if: always() && hashFiles('trivy-results.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy-image
+        continue-on-error: true
+
+      - name: Upload Trivy Image to DefectDojo
+        if: always() && hashFiles('trivy-results.json') != ''
+        run: |
+          echo "Uploading Trivy Container scan results to DefectDojo..."
+          RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST "${DD_HOST}/api/v2/import-scan/" \
+            -H "Authorization: Token ${{ secrets.DD_API_TOKEN }}" \
+            -F "scan_type=Trivy Scan" \
+            -F "file=@trivy-results.json" \
+            -F "product_name=${PRODUCT_NAME}" \
+            -F "engagement_name=${{ steps.metadata.outputs.engagement_name }}" \
+            -F "scan_date=${{ steps.metadata.outputs.scan_date }}" \
+            -F "active=true" \
+            -F "verified=false" \
+            -F "test_title=Trivy Container Scan - ${{ steps.metadata.outputs.commit_sha }}" \
+            -F "branch_tag=${{ steps.metadata.outputs.branch }}" \
+            -F "commit_hash=${{ github.sha }}")
+          
+          HTTP_CODE=$(echo "$RESPONSE" | grep -oP 'HTTP_CODE:\K\d+' || echo "0")
+          
+          if [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "200" ]; then
+            echo "Trivy Container scan uploaded successfully to DefectDojo"
+          else
+            echo "Warning: Upload returned HTTP $HTTP_CODE"
+            echo "$RESPONSE"
+          fi
+        continue-on-error: true        
+
       - name: Upload Trivy scan results to GitHub Security Dashboard
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-results.sarif
           category: trivy-image          
 
-      # -------------------------------
-      # Step 8: Evaluate CRITICAL vulnerabilities
-      # -------------------------------
       - name: Evaluate vulnerability severity
         id: eval
         run: |
@@ -190,9 +231,6 @@ jobs:
           echo "Detected $critical critical vulnerabilities."
           echo "critical=$critical" >> $GITHUB_OUTPUT
 
-      # -------------------------------
-      # Step 9: Fail pipeline if CRITICAL vulnerabilities exist
-      # -------------------------------
       - name: Fail pipeline on critical vulnerabilities
         if: ${{ steps.eval.outputs.critical != '0' }}
         run: |
@@ -200,7 +238,7 @@ jobs:
           exit 1
 
       # -------------------------------
-      # Step 10: Push Docker image (only if scan passes)
+      # PHASE 6: DEPLOYMENT
       # -------------------------------
       - name: Push Docker image
         if: success()
