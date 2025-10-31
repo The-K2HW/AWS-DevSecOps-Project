@@ -92,7 +92,7 @@ jobs:
           fi
         continue-on-error: true               
       # -------------------------------
-      # Step 3: Run Trivy IaC Scan (Terraform security)
+      # HASE 3: INFRASTRUCTURE SECURITY
       # -------------------------------
       - name: Run Trivy IaC Scan (Terraform)
         uses: aquasecurity/trivy-action@master
@@ -105,16 +105,45 @@ jobs:
           severity: 'HIGH,CRITICAL'
           policy: './policy.rego'
           namespaces: 'trivy.ignore'
+         continue-on-error: true
 
-      # Upload IaC scan results
       - name: Upload Trivy IaC results to GitHub Security Dashboard
+        if: always() && hashFiles('tfsec-results.sarif') != ''
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: tfsec-results.sarif
-          category: trivy-iac            
+          category: trivy-iac     
+        continue-on-error: true
+       
+      - name: Upload Trivy IaC to DefectDojo
+        if: always() && hashFiles('tfsec-results.sarif') != ''
+        run: |
+          echo "Uploading Trivy IaC results to DefectDojo..."
+          RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST "${DD_HOST}/api/v2/import-scan/" \
+            -H "Authorization: Token ${{ secrets.DD_API_TOKEN }}" \
+            -F "scan_type=Trivy Scan" \
+            -F "file=@tfsec-results.sarif" \
+            -F "product_name=${PRODUCT_NAME}" \
+            -F "engagement_name=${{ steps.metadata.outputs.engagement_name }}" \
+            -F "scan_date=${{ steps.metadata.outputs.scan_date }}" \
+            -F "active=true" \
+            -F "verified=false" \
+            -F "test_title=Trivy IaC Scan - ${{ steps.metadata.outputs.commit_sha }}" \
+            -F "branch_tag=${{ steps.metadata.outputs.branch }}" \
+            -F "commit_hash=${{ github.sha }}")
+          
+          HTTP_CODE=$(echo "$RESPONSE" | grep -oP 'HTTP_CODE:\K\d+' || echo "0")
+          
+          if [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "200" ]; then
+            echo "Trivy IaC uploaded successfully to DefectDojo"
+          else
+            echo "Warning: Upload returned HTTP $HTTP_CODE"
+            echo "$RESPONSE"
+          fi
+        continue-on-error: true              
 
       # -------------------------------
-      # Step 4: Login to Docker Hub
+      # PHASE 4: CONTAINER BUILD
       # -------------------------------
       - name: Login to Docker Hub
         run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
