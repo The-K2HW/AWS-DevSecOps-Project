@@ -226,15 +226,28 @@ jobs:
 
       - name: Evaluate vulnerability severity
         id: eval
+        if: always()
         run: |
-          critical=$(jq '[.Results[].Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy-results.sarif || echo 0)
-          echo "Detected $critical critical vulnerabilities."
-          echo "critical=$critical" >> $GITHUB_OUTPUT
+          if [ -f "trivy-results.json" ]; then
+            critical=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy-results.json 2>/dev/null || echo 0)
+            high=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy-results.json 2>/dev/null || echo 0)
+            echo "Detected $critical critical vulnerabilities."
+            echo "Detected $high high vulnerabilities."
+            echo "critical=$critical" >> $GITHUB_OUTPUT
+            echo "high=$high" >> $GITHUB_OUTPUT
+          else
+            echo "No Trivy results found"
+            echo "critical=0" >> $GITHUB_OUTPUT
+            echo "high=0" >> $GITHUB_OUTPUT
+          fi
 
       - name: Fail pipeline on critical vulnerabilities
-        if: ${{ steps.eval.outputs.critical != '0' }}
+        if: steps.eval.outputs.critical != '0'
         run: |
-          echo "CRITICAL VULNERABILITIES FOUND: Security scan failed. Check trivy-results.sarif."
+          echo "CRITICAL VULNERABILITIES FOUND: Security scan failed."
+          echo "Found ${{ steps.eval.outputs.critical }} critical vulnerabilities"
+          echo "Review findings in DefectDojo: ${DD_HOST}"
+          echo "Check trivy-results.json for details."
           exit 1
 
       # -------------------------------
