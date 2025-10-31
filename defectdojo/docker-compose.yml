@@ -1,6 +1,6 @@
 
 services:
-  # Base de données PostgreSQL
+  # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
     container_name: defectdojo-postgres
@@ -19,7 +19,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # Redis pour le cache
+  # Redis for caching
   redis:
     image: redis:7-alpine
     container_name: defectdojo-redis
@@ -32,7 +32,7 @@ services:
       timeout: 3s
       retries: 5
 
-  # RabbitMQ pour la gestion des queues
+  # RabbitMQ for queue management
   rabbitmq:
     image: rabbitmq:3.12-management-alpine
     container_name: defectdojo-rabbitmq
@@ -48,7 +48,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # Application DefectDojo (uWSGI)
+  # DefectDojo Application (uWSGI)
   uwsgi:
     image: defectdojo/defectdojo-django:latest
     container_name: defectdojo-uwsgi
@@ -81,7 +81,7 @@ services:
       - defectdojo
     restart: unless-stopped
 
-  # Celery Beat (Planificateur de tâches)
+  # Celery Beat (Task Scheduler)
   celerybeat:
     image: defectdojo/defectdojo-django:latest
     container_name: defectdojo-celerybeat
@@ -97,7 +97,7 @@ services:
       - defectdojo
     restart: unless-stopped
 
-  # Celery Worker (Traitement des tâches)
+  # Celery Worker (Task Processor)
   celeryworker:
     image: defectdojo/defectdojo-django:latest
     container_name: defectdojo-celeryworker
