@@ -542,14 +542,12 @@ jobs:
           docker rm -f test-app || true
           docker system prune -f || true
           echo "Cleaned up test container."
-      
-      # -------------------------------
-      # Step 18: Fail pipeline on high-risk vulnerabilities
-      # -------------------------------
+
       - name: Fail pipeline on high-risk DAST vulnerabilities
-        if: ${{ steps.eval-dast.outputs.high != '0' }}
+        if: steps.eval-dast.outputs.high != '0'
         run: |
           echo "HIGH-RISK DAST VULNERABILITIES DETECTED!"
           echo "Found ${{ steps.eval-dast.outputs.high }} high-risk issues."
           echo "Check artifacts and GitHub Security Dashboard."
+          echo "Review findings in DefectDojo: ${DD_HOST}"
           exit 1
