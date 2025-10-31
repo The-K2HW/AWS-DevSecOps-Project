@@ -10,6 +10,12 @@ on:
 permissions:
   contents: read
   security-events: write
+  actions: read
+
+env:
+  PRODUCT_NAME: ${{ secrets.DD_PRODUCT_NAME }}
+  DD_HOST: ${{ secrets.DD_HOST }}
+  TZ: "Europe/Paris"
 
 jobs:
   security-scan:
@@ -18,13 +24,27 @@ jobs:
 
     steps:
       # -------------------------------
-      # Step 1: Checkout repository
+      # PHASE 1: PREPARATION
       # -------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
-
+      - name: Set Scan Metadata
+        id: metadata
+        run: |
+          echo "scan_date=$(date +%Y-%m-%d)" >> $GITHUB_OUTPUT
+          echo "scan_time=$(date +%H:%M:%S)" >> $GITHUB_OUTPUT
+          echo "commit_sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
+          ENGAGEMENT="${GITHUB_REF#refs/heads/}-$(date +%Y%m%d-%H%M%S)"
+          echo "engagement_name=$ENGAGEMENT" >> $GITHUB_OUTPUT
+          echo "Scan Metadata:"
+          echo "  Date: $(date +%Y-%m-%d)"
+          echo "  Branch: ${GITHUB_REF#refs/heads/}"
+          echo "  Commit: $(git rev-parse --short HEAD)"
+          echo "  Engagement: $ENGAGEMENT"
+          	
       # -------------------------------
-      # Step 2: Run Semgrep (SAST)
+      # PHASE 2: STATIC ANALYSIS
       # -------------------------------
       - name: Run Semgrep (SAST)
         uses: returntocorp/semgrep-action@v1
