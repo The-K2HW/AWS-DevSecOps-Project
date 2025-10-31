@@ -21,3 +21,7 @@ variable "app_repo_branch" {
   default     = "main"
 }
 
+variable "admin_ip" {
+  description = "Current public IP for bastion SSH access"
+  type        = string
+}
