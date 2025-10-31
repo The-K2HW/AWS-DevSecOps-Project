@@ -1,4 +1,4 @@
-name: Security Scan 
+name: Security Scan
 
 on:
   push:
@@ -59,6 +59,64 @@ jobs:
         run: |
           pip install semgrep
           semgrep --version
+      
+      # -------------------------------
+      # CREATE DEFECTDOJO ENGAGEMENT
+      # -------------------------------
+      - name: Create DefectDojo Engagement
+        id: create_engagement
+        run: |
+          echo "=== Creating DefectDojo Engagement ==="
+          echo "Product: ${PRODUCT_NAME}"
+          echo "Engagement: ${{ steps.metadata.outputs.engagement_name }}"
+          
+          # First, get the product ID
+          PRODUCT_RESPONSE=$(curl -s -X GET "${DD_HOST}/api/v2/products/?name=${PRODUCT_NAME}" \
+            -H "Authorization: Token ${{ secrets.DD_API_TOKEN }}")
+          
+          PRODUCT_ID=$(echo "$PRODUCT_RESPONSE" | jq -r '.results[0].id // empty')
+          
+          if [ -z "$PRODUCT_ID" ]; then
+            echo "Error: Product '${PRODUCT_NAME}' not found in DefectDojo"
+            exit 1
+          fi
+          
+          echo "Product ID: $PRODUCT_ID"
+          
+          # Create the engagement
+          ENGAGEMENT_RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST "${DD_HOST}/api/v2/engagements/" \
+            -H "Authorization: Token ${{ secrets.DD_API_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"name\": \"${{ steps.metadata.outputs.engagement_name }}\",
+              \"description\": \"Automated security scan from GitHub Actions\",
+              \"product\": $PRODUCT_ID,
+              \"target_start\": \"${{ steps.metadata.outputs.scan_date }}\",
+              \"target_end\": \"${{ steps.metadata.outputs.scan_date }}\",
+              \"status\": \"In Progress\",
+              \"engagement_type\": \"CI/CD\",
+              \"build_id\": \"${{ github.run_number }}\",
+              \"commit_hash\": \"${{ github.sha }}\",
+              \"branch_tag\": \"${{ steps.metadata.outputs.branch }}\"
+            }")
+          
+          HTTP_CODE=$(echo "$ENGAGEMENT_RESPONSE" | grep -oP 'HTTP_CODE:\K\d+' || echo "0")
+          RESPONSE_BODY=$(echo "$ENGAGEMENT_RESPONSE" | sed 's/HTTP_CODE:.*//')
+          
+          echo "=== Engagement Creation Response ==="
+          echo "HTTP Code: $HTTP_CODE"
+          
+          if [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "200" ]; then
+            ENGAGEMENT_ID=$(echo "$RESPONSE_BODY" | jq -r '.id // empty')
+            echo "✓ Engagement created successfully"
+            echo "Engagement ID: $ENGAGEMENT_ID"
+            echo "engagement_id=$ENGAGEMENT_ID" >> $GITHUB_OUTPUT
+          else
+            echo "✗ Failed to create engagement (HTTP $HTTP_CODE)"
+            echo "Response: $RESPONSE_BODY"
+            exit 1
+          fi
+        continue-on-error: false
           	
       # -------------------------------
       # PHASE 2: STATIC ANALYSIS (SAST)
@@ -71,11 +129,10 @@ jobs:
         continue-on-error: true
         
       - name: Run Semgrep (SAST) - Generate SARIF for GitHub
-        uses: returntocorp/semgrep-action@v1
-        with:
-          config: "p/php"
-          audit_on: "push"
-          generateSarif: true
+        run: |
+          echo "Running Semgrep scan for GitHub Security..."
+          semgrep --config=p/php --sarif --output=semgrep.sarif . || true
+          echo "Semgrep SARIF report generated"
         continue-on-error: true
         
       - name: Upload Semgrep to GitHub Security Dashboard
@@ -92,21 +149,18 @@ jobs:
           echo "=== Uploading Semgrep results to DefectDojo ==="
           echo "File: semgrep.json"
           echo "Size: $(ls -lh semgrep.json | awk '{print $5}')"
+          echo "Engagement ID: ${{ steps.create_engagement.outputs.engagement_id }}"
           
           RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST "${DD_HOST}/api/v2/import-scan/" \
             -H "Authorization: Token ${{ secrets.DD_API_TOKEN }}" \
             -F "scan_type=Semgrep JSON Report" \
             -F "file=@semgrep.json" \
-            -F "product_name=${PRODUCT_NAME}" \
-            -F "engagement_name=${{ steps.metadata.outputs.engagement_name }}" \
+            -F "engagement=${{ steps.create_engagement.outputs.engagement_id }}" \
             -F "scan_date=${{ steps.metadata.outputs.scan_date }}" \
             -F "active=true" \
             -F "verified=false" \
             -F "close_old_findings=false" \
-            -F "test_title=Semgrep SAST - ${{ steps.metadata.outputs.commit_sha }}" \
-            -F "branch_tag=${{ steps.metadata.outputs.branch }}" \
-            -F "commit_hash=${{ github.sha }}" \
-            -F "build_id=${{ github.run_number }}")
+            -F "test_title=Semgrep SAST - ${{ steps.metadata.outputs.commit_sha }}")
           
           HTTP_CODE=$(echo "$RESPONSE" | grep -oP 'HTTP_CODE:\K\d+' || echo "0")
           RESPONSE_BODY=$(echo "$RESPONSE" | sed 's/HTTP_CODE:.*//')
@@ -152,19 +206,17 @@ jobs:
           echo "=== Uploading Trivy IaC results to DefectDojo ==="
           echo "File: tfsec-results.sarif"
           echo "Size: $(ls -lh tfsec-results.sarif | awk '{print $5}')"
+          echo "Engagement ID: ${{ steps.create_engagement.outputs.engagement_id }}"
           
           RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST "${DD_HOST}/api/v2/import-scan/" \
             -H "Authorization: Token ${{ secrets.DD_API_TOKEN }}" \
             -F "scan_type=Trivy Scan" \
             -F "file=@tfsec-results.sarif" \
-            -F "product_name=${PRODUCT_NAME}" \
-            -F "engagement_name=${{ steps.metadata.outputs.engagement_name }}" \
+            -F "engagement=${{ steps.create_engagement.outputs.engagement_id }}" \
             -F "scan_date=${{ steps.metadata.outputs.scan_date }}" \
             -F "active=true" \
             -F "verified=false" \
-            -F "test_title=Trivy IaC Scan - ${{ steps.metadata.outputs.commit_sha }}" \
-            -F "branch_tag=${{ steps.metadata.outputs.branch }}" \
-            -F "commit_hash=${{ github.sha }}")
+            -F "test_title=Trivy IaC Scan - ${{ steps.metadata.outputs.commit_sha }}")
           
           HTTP_CODE=$(echo "$RESPONSE" | grep -oP 'HTTP_CODE:\K\d+' || echo "0")
           RESPONSE_BODY=$(echo "$RESPONSE" | sed 's/HTTP_CODE:.*//')
@@ -236,19 +288,17 @@ jobs:
           echo "=== Uploading Trivy Container scan results to DefectDojo ==="
           echo "File: trivy-results.json"
           echo "Size: $(ls -lh trivy-results.json | awk '{print $5}')"
+          echo "Engagement ID: ${{ steps.create_engagement.outputs.engagement_id }}"
           
           RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST "${DD_HOST}/api/v2/import-scan/" \
             -H "Authorization: Token ${{ secrets.DD_API_TOKEN }}" \
             -F "scan_type=Trivy Scan" \
             -F "file=@trivy-results.json" \
-            -F "product_name=${PRODUCT_NAME}" \
-            -F "engagement_name=${{ steps.metadata.outputs.engagement_name }}" \
+            -F "engagement=${{ steps.create_engagement.outputs.engagement_id }}" \
             -F "scan_date=${{ steps.metadata.outputs.scan_date }}" \
             -F "active=true" \
             -F "verified=false" \
-            -F "test_title=Trivy Container Scan - ${{ steps.metadata.outputs.commit_sha }}" \
-            -F "branch_tag=${{ steps.metadata.outputs.branch }}" \
-            -F "commit_hash=${{ github.sha }}")
+            -F "test_title=Trivy Container Scan - ${{ steps.metadata.outputs.commit_sha }}")
           
           HTTP_CODE=$(echo "$RESPONSE" | grep -oP 'HTTP_CODE:\K\d+' || echo "0")
           RESPONSE_BODY=$(echo "$RESPONSE" | sed 's/HTTP_CODE:.*//')
@@ -440,19 +490,17 @@ jobs:
           
           echo "File: $FILE_TO_UPLOAD"
           echo "Size: $(ls -lh $FILE_TO_UPLOAD | awk '{print $5}')"
+          echo "Engagement ID: ${{ steps.create_engagement.outputs.engagement_id }}"
           
           RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST "${DD_HOST}/api/v2/import-scan/" \
             -H "Authorization: Token ${{ secrets.DD_API_TOKEN }}" \
             -F "scan_type=ZAP Scan" \
             -F "file=@${FILE_TO_UPLOAD}" \
-            -F "product_name=${PRODUCT_NAME}" \
-            -F "engagement_name=${{ steps.metadata.outputs.engagement_name }}" \
+            -F "engagement=${{ steps.create_engagement.outputs.engagement_id }}" \
             -F "scan_date=${{ steps.metadata.outputs.scan_date }}" \
             -F "active=true" \
             -F "verified=false" \
-            -F "test_title=OWASP ZAP DAST - ${{ steps.metadata.outputs.commit_sha }}" \
-            -F "branch_tag=${{ steps.metadata.outputs.branch }}" \
-            -F "commit_hash=${{ github.sha }}")
+            -F "test_title=OWASP ZAP DAST - ${{ steps.metadata.outputs.commit_sha }}")
           
           HTTP_CODE=$(echo "$RESPONSE" | grep -oP 'HTTP_CODE:\K\d+' || echo "0")
           RESPONSE_BODY=$(echo "$RESPONSE" | sed 's/HTTP_CODE:.*//')
@@ -569,16 +617,16 @@ jobs:
           ## Action Required
           
           $(if [ "${{ steps.eval.outputs.critical }}" != "0" ]; then
-            echo "**CRITICAL**: Fix ${{ steps.eval.outputs.critical }} critical vulnerabilities immediately"
+            echo "⚠️ **CRITICAL**: Fix ${{ steps.eval.outputs.critical }} critical vulnerabilities immediately"
           fi)
           $(if [ "${{ steps.eval-dast.outputs.high }}" != "0" ]; then
-            echo "**HIGH**: Address ${{ steps.eval-dast.outputs.high }} high-risk DAST issues"
+            echo "⚠️ **HIGH**: Address ${{ steps.eval-dast.outputs.high }} high-risk DAST issues"
           fi)
           $(if [ "${{ steps.eval.outputs.critical }}" = "0" ] && [ "${{ steps.eval-dast.outputs.high }}" = "0" ]; then
-            echo "No critical or high-risk issues detected"
+            echo "✅ No critical or high-risk issues detected"
           fi)
           
           ---
           
-          Review detailed findings in DefectDojo for remediation guidance.
+          📊 Review detailed findings in DefectDojo for remediation guidance.
           EOF
