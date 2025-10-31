@@ -551,3 +551,46 @@ jobs:
           echo "Check artifacts and GitHub Security Dashboard."
           echo "Review findings in DefectDojo: ${DD_HOST}"
           exit 1
+
+      - name: Generate Summary Report
+        if: always()
+        run: |
+          cat > $GITHUB_STEP_SUMMARY << 'EOF'
+          # Security Scan Summary
+          
+          **Engagement:** `${{ steps.metadata.outputs.engagement_name }}`  
+          **Branch:** `${{ steps.metadata.outputs.branch }}`  
+          **Commit:** `${{ steps.metadata.outputs.commit_sha }}`  
+          **Date:** ${{ steps.metadata.outputs.scan_date }} ${{ steps.metadata.outputs.scan_time }}
+          
+          ## Scan Results
+          
+          | Scan Type | Status | Critical | High | Notes |
+          |-----------|--------|----------|------|-------|
+          | Semgrep (SAST) | Complete | - | - | Static code analysis |
+          | Trivy IaC | Complete | - | - | Infrastructure security |
+          | Trivy Image (SCA) | Complete | ${{ steps.eval.outputs.critical }} | ${{ steps.eval.outputs.high }} | Container vulnerabilities |
+          | OWASP ZAP (DAST) | Complete | - | ${{ steps.eval-dast.outputs.high }} | Dynamic application scan |
+          
+          ## Quick Links
+          
+          - [DefectDojo Dashboard](${DD_HOST}/product)
+          - [GitHub Security Tab](https://github.com/${{ github.repository }}/security/code-scanning)
+          - [Workflow Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          
+          ## Action Required
+          
+          $(if [ "${{ steps.eval.outputs.critical }}" != "0" ]; then
+            echo "- CRITICAL: Fix ${{ steps.eval.outputs.critical }} critical vulnerabilities immediately"
+          fi)
+          $(if [ "${{ steps.eval-dast.outputs.high }}" != "0" ]; then
+            echo "- HIGH: Address ${{ steps.eval-dast.outputs.high }} high-risk DAST issues"
+          fi)
+          $(if [ "${{ steps.eval.outputs.critical }}" = "0" ] && [ "${{ steps.eval-dast.outputs.high }}" = "0" ]; then
+            echo "- No critical or high-risk issues detected"
+          fi)
+          
+          ---
+          
+          Review detailed findings in DefectDojo for remediation guidance.
+          EOF          
