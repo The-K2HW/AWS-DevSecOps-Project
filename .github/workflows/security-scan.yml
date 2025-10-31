@@ -262,9 +262,10 @@ jobs:
           echo "Image pushed successfully"
 
       # -------------------------------
-      # Step 11: Start application container for DAST
+      # PHASE 7: DYNAMIC TESTING
       # -------------------------------
       - name: Start application container for DAST
+        if: success() || failure()
         run: |
           echo "Starting PHP application for DAST..."
           docker run -d --name test-app \
@@ -403,7 +404,7 @@ jobs:
           fi
       
       # -------------------------------
-      # Step 16: Upload ZAP Reports (manual artifact upload)
+      # PHASE 8: REPORTING
       # -------------------------------
       - name: Upload ZAP reports as artifacts
         if: always()
