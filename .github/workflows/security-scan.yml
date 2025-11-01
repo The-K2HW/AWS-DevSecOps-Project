@@ -234,9 +234,10 @@ jobs:
           echo "Size: $(ls -lh trivy-iac.json | awk '{print $5}')"
           echo "Engagement ID: ${{ steps.create_engagement.outputs.engagement_id }}"
           
+          # FIXED: Use correct scan type for Trivy IaC
           RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST "${DD_HOST}/api/v2/import-scan/" \
             -H "Authorization: Token ${{ secrets.DD_API_TOKEN }}" \
-            -F "scan_type=Aqua Trivy" \
+            -F "scan_type=Trivy Operator Scan" \
             -F "file=@trivy-iac.json" \
             -F "engagement=${{ steps.create_engagement.outputs.engagement_id }}" \
             -F "scan_date=${{ steps.metadata.outputs.scan_date }}" \
@@ -315,9 +316,10 @@ jobs:
           echo "Size: $(ls -lh trivy-results.json | awk '{print $5}')"
           echo "Engagement ID: ${{ steps.create_engagement.outputs.engagement_id }}"
           
+          # FIXED: Use correct scan type for Trivy container scan
           RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST "${DD_HOST}/api/v2/import-scan/" \
             -H "Authorization: Token ${{ secrets.DD_API_TOKEN }}" \
-            -F "scan_type=Trivy Scan" \
+            -F "scan_type=Trivy Operator Scan" \
             -F "file=@trivy-results.json" \
             -F "engagement=${{ steps.create_engagement.outputs.engagement_id }}" \
             -F "scan_date=${{ steps.metadata.outputs.scan_date }}" \
@@ -501,12 +503,15 @@ jobs:
         run: |
           echo "=== Uploading ZAP results to DefectDojo ==="
           
+          # FIXED: DefectDojo prefers XML format for ZAP, and needs specific formatting
           if [ -f "report_xml.xml" ]; then
             FILE_TO_UPLOAD="report_xml.xml"
+            SCAN_TYPE="ZAP Scan"
             echo "Using XML format"
           elif [ -f "report_json.json" ]; then
             FILE_TO_UPLOAD="report_json.json"
-            echo "Using JSON format"
+            SCAN_TYPE="ZAP Scan"
+            echo "Using JSON format (fallback)"
           else
             echo "No ZAP report file found to upload"
             exit 0
@@ -518,12 +523,13 @@ jobs:
           
           RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST "${DD_HOST}/api/v2/import-scan/" \
             -H "Authorization: Token ${{ secrets.DD_API_TOKEN }}" \
-            -F "scan_type=ZAP Scan" \
+            -F "scan_type=${SCAN_TYPE}" \
             -F "file=@${FILE_TO_UPLOAD}" \
             -F "engagement=${{ steps.create_engagement.outputs.engagement_id }}" \
             -F "scan_date=${{ steps.metadata.outputs.scan_date }}" \
             -F "active=true" \
             -F "verified=false" \
+            -F "close_old_findings=false" \
             -F "test_title=OWASP ZAP DAST - ${{ steps.metadata.outputs.commit_sha }}")
           
           HTTP_CODE=$(echo "$RESPONSE" | grep -oP 'HTTP_CODE:\K\d+' || echo "0")
@@ -537,6 +543,24 @@ jobs:
             echo "✓ ZAP results uploaded successfully to DefectDojo"
           else
             echo "✗ Upload failed with HTTP $HTTP_CODE"
+            echo "Attempting retry with alternative approach..."
+            
+            # Retry with minimum fields if first attempt failed
+            RETRY_RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST "${DD_HOST}/api/v2/import-scan/" \
+              -H "Authorization: Token ${{ secrets.DD_API_TOKEN }}" \
+              -F "scan_type=${SCAN_TYPE}" \
+              -F "file=@${FILE_TO_UPLOAD}" \
+              -F "engagement=${{ steps.create_engagement.outputs.engagement_id }}" \
+              -F "scan_date=${{ steps.metadata.outputs.scan_date }}")
+            
+            RETRY_HTTP_CODE=$(echo "$RETRY_RESPONSE" | grep -oP 'HTTP_CODE:\K\d+' || echo "0")
+            echo "Retry HTTP Code: $RETRY_HTTP_CODE"
+            
+            if [ "$RETRY_HTTP_CODE" = "201" ] || [ "$RETRY_HTTP_CODE" = "200" ]; then
+              echo "✓ ZAP results uploaded successfully on retry"
+            else
+              echo "✗ Retry also failed"
+            fi
           fi
         continue-on-error: true
 
