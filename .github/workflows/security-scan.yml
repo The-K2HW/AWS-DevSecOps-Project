@@ -498,33 +498,148 @@ jobs:
           category: owasp-zap-dast
         continue-on-error: true
 
-      - name: Upload ZAP to DefectDojo
-        if: always() && (hashFiles('report_xml.xml') != '' || hashFiles('report_json.json') != '')
+      - name: Convert ZAP to DefectDojo Generic Findings
+        if: always() && hashFiles('report_json.json') != ''
         run: |
-          echo "=== Uploading ZAP results to DefectDojo ==="
+          cat > zap_to_generic.py << 'PYTHON_SCRIPT'
+          #!/usr/bin/env python3
+          import json
+          import sys
+          from datetime import datetime
           
-          # FIXED: DefectDojo prefers XML format for ZAP, and needs specific formatting
-          if [ -f "report_xml.xml" ]; then
-            FILE_TO_UPLOAD="report_xml.xml"
-            SCAN_TYPE="ZAP Scan"
-            echo "Using XML format"
-          elif [ -f "report_json.json" ]; then
-            FILE_TO_UPLOAD="report_json.json"
-            SCAN_TYPE="ZAP Scan"
-            echo "Using JSON format (fallback)"
-          else
-            echo "No ZAP report file found to upload"
-            exit 0
-          fi
+          def map_severity(zap_risk):
+              severity_map = {
+                  "High": "High",
+                  "Medium": "Medium",
+                  "Low": "Low",
+                  "Informational": "Info"
+              }
+              risk_level = zap_risk.split()[0] if zap_risk else "Info"
+              return severity_map.get(risk_level, "Info")
           
-          echo "File: $FILE_TO_UPLOAD"
-          echo "Size: $(ls -lh $FILE_TO_UPLOAD | awk '{print $5}')"
+          try:
+              with open('report_json.json', 'r', encoding='utf-8') as f:
+                  zap_data = json.load(f)
+          except Exception as e:
+              print(f"Error loading ZAP report: {e}")
+              sys.exit(1)
+          
+          generic_findings = {"findings": []}
+          
+          for site in zap_data.get('site', []):
+              site_name = site.get('@name', 'Unknown')
+              site_host = site.get('@host', 'Unknown')
+              
+              for alert in site.get('alerts', []):
+                  plugin_id = str(alert.get('pluginid', '0'))
+                  name = alert.get('name', 'Unknown Vulnerability')
+                  risk = alert.get('riskdesc', 'Informational')
+                  confidence = alert.get('confidence', 'Unknown')
+                  description = alert.get('desc', 'No description available')
+                  solution = alert.get('solution', 'No solution provided')
+                  reference = alert.get('reference', '')
+                  cwe_id = alert.get('cweid', '')
+                  
+                  severity = map_severity(risk)
+                  
+                  instances = alert.get('instances', [])
+                  if not instances:
+                      instances = [{}]
+                  
+                  for idx, instance in enumerate(instances):
+                      uri = instance.get('uri', site_name)
+                      method = instance.get('method', 'GET')
+                      param = instance.get('param', '')
+                      attack = instance.get('attack', '')
+                      evidence = instance.get('evidence', '')
+                      
+                      title = f"{name}" if len(instances) == 1 else f"{name} (Instance {idx + 1})"
+                      
+                      detailed_description = f"{description}\n\n"
+                      if uri:
+                          detailed_description += f"**URL:** {uri}\n"
+                      if method:
+                          detailed_description += f"**Method:** {method}\n"
+                      if param:
+                          detailed_description += f"**Parameter:** {param}\n"
+                      if attack:
+                          detailed_description += f"**Attack:** {attack}\n"
+                      if evidence:
+                          detailed_description += f"**Evidence:** {evidence}\n"
+                      
+                      detailed_description += f"\n**Risk:** {risk}\n"
+                      detailed_description += f"**Confidence:** {confidence}\n"
+                      
+                      if cwe_id and cwe_id not in ['-1', '0']:
+                          detailed_description += f"**CWE:** {cwe_id}\n"
+                      
+                      unique_id = f"ZAP-{plugin_id}-{hash(uri + param)}"
+                      
+                      finding = {
+                          "title": title,
+                          "description": detailed_description,
+                          "severity": severity,
+                          "date": datetime.now().strftime("%Y-%m-%d"),
+                          "unique_id_from_tool": unique_id,
+                          "static_finding": False,
+                          "dynamic_finding": True,
+                          "vuln_id_from_tool": plugin_id
+                      }
+                      
+                      if solution and solution != "No solution provided":
+                          finding["mitigation"] = solution
+                      
+                      if reference and reference.strip():
+                          finding["references"] = reference.strip()
+                      
+                      if cwe_id and cwe_id not in ['-1', '0']:
+                          try:
+                              finding["cwe"] = int(cwe_id)
+                          except:
+                              pass
+                      
+                      if uri:
+                          path = uri.replace(f"http://{site_host}", "").replace(f"https://{site_host}", "")
+                          finding["endpoints"] = [{
+                              "host": site_host,
+                              "path": path if path else "/",
+                              "protocol": "http" if uri.startswith("http://") else "https"
+                          }]
+                      
+                      generic_findings["findings"].append(finding)
+          
+          with open('zap_defectdojo_generic.json', 'w', encoding='utf-8') as f:
+              json.dump(generic_findings, f, indent=2, ensure_ascii=False)
+          
+          print(f"✓ Converted {len(generic_findings['findings'])} ZAP findings to Generic format")
+          
+          severity_counts = {}
+          for finding in generic_findings['findings']:
+              sev = finding['severity']
+              severity_counts[sev] = severity_counts.get(sev, 0) + 1
+          
+          print("Severity Summary:")
+          for sev in ['High', 'Medium', 'Low', 'Info']:
+              count = severity_counts.get(sev, 0)
+              if count > 0:
+                  print(f"  {sev}: {count}")
+          PYTHON_SCRIPT
+          
+          python3 zap_to_generic.py
+        continue-on-error: true
+
+      - name: Upload ZAP to DefectDojo (Generic Findings)
+        if: always() && hashFiles('zap_defectdojo_generic.json') != ''
+        run: |
+          echo "=== Uploading ZAP results to DefectDojo (Generic Findings Format) ==="
+          echo "File: zap_defectdojo_generic.json"
+          echo "Size: $(ls -lh zap_defectdojo_generic.json | awk '{print $5}')"
           echo "Engagement ID: ${{ steps.create_engagement.outputs.engagement_id }}"
           
           RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST "${DD_HOST}/api/v2/import-scan/" \
             -H "Authorization: Token ${{ secrets.DD_API_TOKEN }}" \
-            -F "scan_type=${SCAN_TYPE}" \
-            -F "file=@${FILE_TO_UPLOAD}" \
+            -F "scan_type=Generic Findings Import" \
+            -F "file=@zap_defectdojo_generic.json" \
             -F "engagement=${{ steps.create_engagement.outputs.engagement_id }}" \
             -F "scan_date=${{ steps.metadata.outputs.scan_date }}" \
             -F "active=true" \
@@ -540,27 +655,10 @@ jobs:
           echo "Response: $RESPONSE_BODY"
           
           if [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "200" ]; then
-            echo "✓ ZAP results uploaded successfully to DefectDojo"
+            echo "✓ ZAP results uploaded successfully to DefectDojo via Generic Findings Import"
           else
             echo "✗ Upload failed with HTTP $HTTP_CODE"
-            echo "Attempting retry with alternative approach..."
-            
-            # Retry with minimum fields if first attempt failed
-            RETRY_RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST "${DD_HOST}/api/v2/import-scan/" \
-              -H "Authorization: Token ${{ secrets.DD_API_TOKEN }}" \
-              -F "scan_type=${SCAN_TYPE}" \
-              -F "file=@${FILE_TO_UPLOAD}" \
-              -F "engagement=${{ steps.create_engagement.outputs.engagement_id }}" \
-              -F "scan_date=${{ steps.metadata.outputs.scan_date }}")
-            
-            RETRY_HTTP_CODE=$(echo "$RETRY_RESPONSE" | grep -oP 'HTTP_CODE:\K\d+' || echo "0")
-            echo "Retry HTTP Code: $RETRY_HTTP_CODE"
-            
-            if [ "$RETRY_HTTP_CODE" = "201" ] || [ "$RETRY_HTTP_CODE" = "200" ]; then
-              echo "✓ ZAP results uploaded successfully on retry"
-            else
-              echo "✗ Retry also failed"
-            fi
+            echo "Response details: $RESPONSE_BODY"
           fi
         continue-on-error: true
 
@@ -611,6 +709,7 @@ jobs:
             report_md.md
             report_xml.xml
             zap-results.sarif
+            zap_defectdojo_generic.json
           retention-days: 90
           if-no-files-found: ignore
 
