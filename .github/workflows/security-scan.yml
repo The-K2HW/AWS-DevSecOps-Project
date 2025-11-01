@@ -236,7 +236,7 @@ jobs:
           
           RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST "${DD_HOST}/api/v2/import-scan/" \
             -H "Authorization: Token ${{ secrets.DD_API_TOKEN }}" \
-            -F "scan_type=Trivy Operator Scan" \
+            -F "scan_type=Aqua Trivy" \
             -F "file=@trivy-iac.json" \
             -F "engagement=${{ steps.create_engagement.outputs.engagement_id }}" \
             -F "scan_date=${{ steps.metadata.outputs.scan_date }}" \
@@ -501,12 +501,12 @@ jobs:
         run: |
           echo "=== Uploading ZAP results to DefectDojo ==="
           
-          if [ -f "report_json.json" ]; then
-            FILE_TO_UPLOAD="report_json.json"
-            echo "Using JSON format"
-          elif [ -f "report_xml.xml" ]; then
+          if [ -f "report_xml.xml" ]; then
             FILE_TO_UPLOAD="report_xml.xml"
             echo "Using XML format"
+          elif [ -f "report_json.json" ]; then
+            FILE_TO_UPLOAD="report_json.json"
+            echo "Using JSON format"
           else
             echo "No ZAP report file found to upload"
             exit 0
