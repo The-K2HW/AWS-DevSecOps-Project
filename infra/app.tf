@@ -44,51 +44,51 @@ resource "aws_launch_template" "app_lt" {
   # User data for app servers
   # ==========================
   user_data = base64encode(<<-EOF
-      #!/bin/bash
-      set -xe
+    #!/bin/bash
+    set -xe
 
-      # Basic updates and packages
-      dnf -y update --allowerasing
-      dnf -y install httpd php php-cli php-mysqlnd php-json git unzip --allowerasing
+    # Basic updates and packages
+    dnf -y update --allowerasing
+    dnf -y install httpd php php-cli php-mysqlnd php-json git unzip --allowerasing
 
-      # Install SSM Agent
-      dnf -y install amazon-ssm-agent
-      systemctl enable amazon-ssm-agent
-      systemctl start amazon-ssm-agent
+    # Install SSM Agent
+    dnf -y install amazon-ssm-agent
+    systemctl enable amazon-ssm-agent
+    systemctl start amazon-ssm-agent
 
-      # Enable and start Apache
-      systemctl enable httpd
-      systemctl start httpd
+    # Enable and start Apache
+    systemctl enable httpd
+    systemctl start httpd
 
-      # Install Composer
-      export HOME=/root
-      curl -sS https://getcomposer.org/installer -o /tmp/composer-setup.php
-      php /tmp/composer-setup.php --install-dir=/usr/local/bin --filename=composer
-          
-      # Deploy application
-      cd /var/www
-      rm -rf html
-      mkdir -p html
-      cd /var/www/html
+    # Install Composer
+    export HOME=/root
+    curl -sS https://getcomposer.org/installer -o /tmp/composer-setup.php
+    php /tmp/composer-setup.php --install-dir=/usr/local/bin --filename=composer
+        
+    # Deploy application
+    cd /var/www
+    rm -rf html
+    mkdir -p html
+    cd /var/www/html
 
-      # Pull your app from GitHub
-      git clone --branch ${var.app_repo_branch} ${var.app_repo_url} /tmp/app
-      cp -r /tmp/app/app/* /var/www/html/
-      cd /var/www/html
-      
-      # Install AWS SDK with HOME set
-      export HOME=/root
-      composer require aws/aws-sdk-php --no-progress --no-interaction
+    # Pull your app from GitHub
+    git clone --branch ${var.app_repo_branch} ${var.app_repo_url} /tmp/app
+    cp -r /tmp/app/app/* /var/www/html/
+    cd /var/www/html
+    
+    # Install AWS SDK with HOME set
+    export HOME=/root
+    composer require aws/aws-sdk-php --no-progress --no-interaction
 
-      # Permissions for Apache
-      chown -R apache:apache /var/www/html
-      find /var/www/html -type d -exec chmod 755 {} \\;
-      find /var/www/html -type f -exec chmod 644 {} \\;
+    # Permissions for Apache
+    chown -R apache:apache /var/www/html
+    chmod -R 755 /var/www/html
 
-      # Restart Apache after deployment
-      systemctl restart httpd
-  EOF
-  )
+    # Restart Apache after deployment
+    systemctl restart httpd
+    echo "------ > Deployment completed successfully at $(date)" >> /var/log/user-data.log
+EOF
+)
 
   tag_specifications {
     resource_type = "instance"
@@ -173,8 +173,8 @@ resource "aws_autoscaling_group" "app_asg" {
   desired_capacity = 1
 
   vpc_zone_identifier = [
-    aws_subnet.private_a.id,
-    aws_subnet.private_b.id
+    aws_subnet.private_app_a.id,
+    aws_subnet.private_app_b.id
   ]
 
   health_check_type         = "EC2"
