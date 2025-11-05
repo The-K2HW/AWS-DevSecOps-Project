@@ -6,14 +6,14 @@ resource "aws_db_subnet_group" "rds_subnet_group" {
   name        = "${var.project_name}-rds-subnet-group"
   description = "Subnet group for RDS instance"
   subnet_ids = [
-    aws_subnet.private_a.id,
-    aws_subnet.private_b.id
+    aws_subnet.private_db_a.id,
+    aws_subnet.private_db_b.id
   ]
-
   tags = {
     Name = "${var.project_name}-rds-subnet-group"
   }
 }
+
 
 ############################################
 # MySQL RDS Instance
@@ -33,6 +33,10 @@ resource "aws_db_instance" "rds_instance" {
   skip_final_snapshot = true # to avoid snapshot cost on destroy
   deletion_protection = false
 
+  enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
+
+  monitoring_interval = 60  
+  monitoring_role_arn = aws_iam_role.rds_monitoring_role.arn
   storage_encrypted          = true
   backup_retention_period    = 7
   backup_window              = "03:00-04:00"
@@ -64,7 +68,7 @@ resource "random_password" "db_password" {
 ############################################
 
 resource "aws_secretsmanager_secret" "rds_secret" {
-  name        = "${var.project_name}-rds-credentials-v2"
+  name        = "${var.project_name}-rds-credentials-v3"
   description = "RDS MySQL credentials stored securely"
 }
 
