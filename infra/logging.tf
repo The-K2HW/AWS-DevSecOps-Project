@@ -3,10 +3,10 @@
 ############################################
 
 resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
-  name              = "/aws/vpc/${var.project_name}-flow-logs"
+  name              = "/aws/vpc/${var.project_name}-flow-logs-v2"
   retention_in_days = 7
   tags = {
-    Name = "${var.project_name}-vpc-flow-logs"
+    Name = "${var.project_name}-vpc-flow-logs-v2"
   }
 }
 

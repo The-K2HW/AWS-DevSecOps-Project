@@ -67,17 +67,6 @@ resource "aws_security_group_rule" "ec2_http_from_alb" {
   source_security_group_id = aws_security_group.alb_sg.id
 }
 
-# HTTP to EC2 directly from Internet (when ALB is disabled)
-resource "aws_security_group_rule" "ec2_http_from_world" {
-  type              = "ingress"
-  description       = "Allow HTTP from Internet (no ALB)"
-  from_port         = 80
-  to_port           = 80
-  protocol          = "tcp"
-  security_group_id = aws_security_group.ec2_sg.id
-  cidr_blocks       = ["0.0.0.0/0"]
-}
-
 # SG For RDS
 
 resource "aws_security_group" "rds_sg" {

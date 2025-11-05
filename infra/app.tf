@@ -1,5 +1,6 @@
 ############################################
-# AMI Lookup for Amazon Linux 
+# AMI Lookup for Amazon Linux 2023
+# AMI Lookup for Amazon Linux 2023
 ############################################
 
 data "aws_ami" "al2023" {
@@ -40,51 +41,55 @@ resource "aws_launch_template" "app_lt" {
     http_put_response_hop_limit = 1
   }
 
-  # Cloud-init user data to install stack and deploy app 
+  # ==========================
+  # User data for app servers
+  # ==========================
   user_data = base64encode(<<-EOF
-        #!/bin/bash
-        set -xe
+    #!/bin/bash
+    set -xe
 
-        # Basic updates and packages
-        dnf -y update --allowerasing
-        dnf -y install httpd php php-cli php-mysqlnd php-json git unzip --allowerasing
+    # Basic updates and packages
+    dnf -y update --allowerasing
+    dnf -y install httpd php php-cli php-mysqlnd php-json git unzip --allowerasing
 
-        # Install SSM Agent
-        dnf -y install amazon-ssm-agent
-        systemctl enable amazon-ssm-agent
-        systemctl start amazon-ssm-agent
+    # Install SSM Agent
+    dnf -y install amazon-ssm-agent
+    systemctl enable amazon-ssm-agent
+    systemctl start amazon-ssm-agent
 
-        # Enable and start Apache
-        systemctl enable httpd
-        systemctl start httpd
+    # Enable and start Apache
+    systemctl enable httpd
+    systemctl start httpd
 
-        # Install Composer
-        curl -sS https://getcomposer.org/installer -o /tmp/composer-setup.php
-        php /tmp/composer-setup.php --install-dir=/usr/local/bin --filename=composer
-            
-        # Deploy application
-        cd /var/www
-        rm -rf html
-        mkdir -p html
-        cd /var/www/html
+    # Install Composer
+    export HOME=/root
+    curl -sS https://getcomposer.org/installer -o /tmp/composer-setup.php
+    php /tmp/composer-setup.php --install-dir=/usr/local/bin --filename=composer
+        
+    # Deploy application
+    cd /var/www
+    rm -rf html
+    mkdir -p html
+    cd /var/www/html
 
-        # Pull your app from GitHub
-        git clone --branch ${var.app_repo_branch} ${var.app_repo_url} /tmp/app
-        # Ensure vendor dir exists and install AWS SDK for PHP
-        # (your app code calls 'require aws-autoloader.php', which comes from this package)
-        cp -r /tmp/app/app/* /var/www/html/
-        cd /var/www/html
-        composer require aws/aws-sdk-php --no-progress --no-interaction
+    # Pull your app from GitHub
+    git clone --branch ${var.app_repo_branch} ${var.app_repo_url} /tmp/app
+    cp -r /tmp/app/app/* /var/www/html/
+    cd /var/www/html
+    
+    # Install AWS SDK with HOME set
+    export HOME=/root
+    composer require aws/aws-sdk-php --no-progress --no-interaction
 
-        # Permissions for Apache
-        chown -R apache:apache /var/www/html
-        find /var/www/html -type d -exec chmod 755 {} \\;
-        find /var/www/html -type f -exec chmod 644 {} \\;
+    # Permissions for Apache
+    chown -R apache:apache /var/www/html
+    chmod -R 755 /var/www/html
 
-        # Restart Apache after deployment
-        systemctl restart httpd
-    EOF
-  )
+    # Restart Apache after deployment
+    systemctl restart httpd
+    echo "------ > Deployment completed successfully at $(date)" >> /var/log/user-data.log
+EOF
+)
 
   tag_specifications {
     resource_type = "instance"
@@ -95,7 +100,8 @@ resource "aws_launch_template" "app_lt" {
 }
 
 ############################################
-# Target Group For ALB 
+# Target Group for ALB
+# Target Group for ALB
 ############################################
 
 resource "aws_lb_target_group" "app_tg" {
@@ -121,12 +127,14 @@ resource "aws_lb_target_group" "app_tg" {
 }
 
 ############################################
-# ALB (public)
+# Application Load Balancer (public)
+# Application Load Balancer (public)
 ############################################
 
 resource "aws_lb" "app_alb" {
   # trivy:ignore:AVD-AWS-0106
-  # justification: This ALB is intentionally public to serve HTTP/HTTPS traffic for the web application.
+  # justification: Public ALB (HTTP only) allowed for this educational lab
+  # justification: Public ALB (HTTP only) allowed for this educational lab
 
   name                       = "${var.project_name}-alb"
   load_balancer_type         = "application"
@@ -144,7 +152,8 @@ resource "aws_lb" "app_alb" {
 }
 
 ############################################
-# HTTP Listener
+# HTTP Listener (lab only – no HTTPS)
+# HTTP Listener (lab only – no HTTPS)
 ############################################
 
 resource "aws_lb_listener" "http_listener" {
@@ -159,7 +168,7 @@ resource "aws_lb_listener" "http_listener" {
 }
 
 ############################################
-# Auto Scaling Group (private subnet)
+# Auto Scaling Group (private subnets)
 ############################################
 
 resource "aws_autoscaling_group" "app_asg" {
@@ -167,9 +176,10 @@ resource "aws_autoscaling_group" "app_asg" {
   max_size         = 2
   min_size         = 1
   desired_capacity = 1
+
   vpc_zone_identifier = [
-    aws_subnet.private_a.id,
-    aws_subnet.private_b.id
+    aws_subnet.private_app_a.id,
+    aws_subnet.private_app_b.id
   ]
 
   health_check_type         = "EC2"
@@ -194,10 +204,10 @@ resource "aws_autoscaling_group" "app_asg" {
 }
 
 ############################################
-# Output : ALB DNS NAME
+# Output: ALB DNS Name
 ############################################
 
-output "alb_dn_name" {
-  description = "Public DNS name of ALB"
+output "alb_dns_name" {
+  description = "Public DNS name of the Application Load Balancer"
   value       = aws_lb.app_alb.dns_name
 }

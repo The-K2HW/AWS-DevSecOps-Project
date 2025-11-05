@@ -41,23 +41,45 @@ resource "aws_subnet" "public_b" {
 # 3 - Private Subnets (2 AZs)
 ############################################
 
-resource "aws_subnet" "private_a" {
+# Private subnets for the Application layer
+resource "aws_subnet" "private_app_a" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = "10.0.3.0/24"
   availability_zone = "us-east-1a"
   tags = {
-    Name = "${var.project_name}-private-a"
-    Tier = "private"
+    Name = "${var.project_name}-private-app-a"
+    Tier = "app"
   }
 }
 
-resource "aws_subnet" "private_b" {
+resource "aws_subnet" "private_app_b" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = "10.0.4.0/24"
   availability_zone = "us-east-1b"
   tags = {
-    Name = "${var.project_name}-private-b"
-    Tier = "private"
+    Name = "${var.project_name}-private-app-b"
+    Tier = "app"
+  }
+}
+
+# Private subnets for the Database layer
+resource "aws_subnet" "private_db_a" {
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = "10.0.5.0/24"
+  availability_zone = "us-east-1a"
+  tags = {
+    Name = "${var.project_name}-private-db-a"
+    Tier = "db"
+  }
+}
+
+resource "aws_subnet" "private_db_b" {
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = "10.0.6.0/24"
+  availability_zone = "us-east-1b"
+  tags = {
+    Name = "${var.project_name}-private-db-b"
+    Tier = "db"
   }
 }
 
@@ -115,27 +137,40 @@ resource "aws_route_table" "public" {
   }
 }
 
-# Private A route table -> NAT A
-resource "aws_route_table" "private_a" {
+
+resource "aws_route_table" "private_app_a" {
   vpc_id = aws_vpc.main.id
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.nat_a.id
   }
   tags = {
-    Name = "${var.project_name}-private-a-rt"
+    Name = "${var.project_name}-private-app-a-rt"
   }
 }
 
-# Private B route table -> NAT B
-resource "aws_route_table" "private_b" {
+resource "aws_route_table" "private_db_a" {
+  vpc_id = aws_vpc.main.id
+  tags = {
+    Name = "${var.project_name}-private-db-a-rt"
+  }
+}
+
+resource "aws_route_table" "private_app_b" {
   vpc_id = aws_vpc.main.id
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.nat_b.id
   }
   tags = {
-    Name = "${var.project_name}-private-b-rt"
+    Name = "${var.project_name}-private-app-b-rt"
+  }
+}
+
+resource "aws_route_table" "private_db_b" {
+  vpc_id = aws_vpc.main.id
+  tags = {
+    Name = "${var.project_name}-private-db-b-rt"
   }
 }
 
@@ -154,13 +189,23 @@ resource "aws_route_table_association" "public_b" {
   route_table_id = aws_route_table.public.id
 }
 
-# Private Subnets 
-resource "aws_route_table_association" "private_a" {
-  subnet_id      = aws_subnet.private_a.id
-  route_table_id = aws_route_table.private_a.id
+# associate
+resource "aws_route_table_association" "private_app_a" {
+  subnet_id      = aws_subnet.private_app_a.id
+  route_table_id = aws_route_table.private_app_a.id
 }
 
-resource "aws_route_table_association" "private_b" {
-  subnet_id      = aws_subnet.private_b.id
-  route_table_id = aws_route_table.private_b.id
+resource "aws_route_table_association" "private_db_a" {
+  subnet_id      = aws_subnet.private_db_a.id
+  route_table_id = aws_route_table.private_db_a.id
+}
+
+resource "aws_route_table_association" "private_app_b" {
+  subnet_id      = aws_subnet.private_app_b.id
+  route_table_id = aws_route_table.private_app_b.id
+}
+
+resource "aws_route_table_association" "private_db_b" {
+  subnet_id      = aws_subnet.private_db_b.id
+  route_table_id = aws_route_table.private_db_b.id
 }

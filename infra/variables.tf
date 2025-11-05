@@ -18,7 +18,7 @@ variable "app_repo_url" {
 variable "app_repo_branch" {
   description = "Branch to deploy"
   type        = string
-  default     = "main"
+  default     = "infra"
 }
 
 variable "admin_ip" {
