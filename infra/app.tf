@@ -1,5 +1,6 @@
 ############################################
 # AMI Lookup for Amazon Linux 2023
+# AMI Lookup for Amazon Linux 2023
 ############################################
 
 data "aws_ami" "al2023" {
@@ -100,6 +101,7 @@ EOF
 
 ############################################
 # Target Group for ALB
+# Target Group for ALB
 ############################################
 
 resource "aws_lb_target_group" "app_tg" {
@@ -126,10 +128,12 @@ resource "aws_lb_target_group" "app_tg" {
 
 ############################################
 # Application Load Balancer (public)
+# Application Load Balancer (public)
 ############################################
 
 resource "aws_lb" "app_alb" {
   # trivy:ignore:AVD-AWS-0106
+  # justification: Public ALB (HTTP only) allowed for this educational lab
   # justification: Public ALB (HTTP only) allowed for this educational lab
 
   name                       = "${var.project_name}-alb"
@@ -148,6 +152,7 @@ resource "aws_lb" "app_alb" {
 }
 
 ############################################
+# HTTP Listener (lab only – no HTTPS)
 # HTTP Listener (lab only – no HTTPS)
 ############################################
 

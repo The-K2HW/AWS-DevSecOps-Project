@@ -19,7 +19,7 @@
     - [6.3. Infrastructure as Code (IaC) Security Scan](#63-infrastructure-as-code-iac-security-scan)  
     - [6.4. Software Composition Analysis (SCA)](#64-software-composition-analysis-sca)  
     - [6.5. Dynamic Application Security Testing (DAST)](#65-dynamic-application-security-testing-dast)  
-
+    - [6.6. Vulnerability Management](#66-vulnerability-management)  
 ---
 
 ## Introduction
@@ -206,7 +206,183 @@ This pipeline automatically scans the application and infrastructure code for vu
 4. Converts ZAP JSON report into SARIF for GitHub integration.  
 5. Uploads artifacts and fails pipeline if high-risk vulnerabilities exist.
 
-![ZAP Scan Summary in GitHub Security Dashboard](./assets/OWASPAlerts.png)
+---
+
+## 6.6. Vulnerability Management
+
+### Tool Used: [DefectDojo](https://github.com/DefectDojo/django-DefectDojo)
+
+**DefectDojo** is an open-source Application Security Management platform that consolidates security findings from multiple scanning tools into a unified dashboard. In this project, DefectDojo serves as the **central vulnerability management hub**, automatically receiving and tracking findings from:
+
+- **Semgrep** (SAST) - Static code analysis
+- **Trivy** (IaC Security) - Infrastructure misconfigurations  
+- **Trivy** (SCA) - Container vulnerabilities
+- **OWASP ZAP** (DAST) - Dynamic security testing
+
+**Key Benefits:**
+- Single pane of glass for all security findings
+- Automatic deduplication across scans
+- SLA-based remediation tracking
+- Executive reporting and metrics
+- Fully automated CI/CD integration
+
+---
+
+### Architecture & Deployment
+
+DefectDojo is deployed on a dedicated **EC2 instance (t3.medium, Ubuntu 22.04)** within the AWS VPC private subnet:
+
+```
+                                            ┌─────────────────────────────────┐
+                                            │   GitHub Actions Pipeline       │
+                                            │   (security-scan.yml)           │
+                                            └──────────────┬──────────────────┘
+                                                           │ API Calls
+                                                           │ (HTTPS)
+                                                           ▼
+                        ┌────────────────────────────────────────────────────────────┐
+                        │              AWS VPC - Private Subnet                      │
+                        │                                                            │
+                        │  ┌──────────────────────────────────────────────────┐      │
+                        │  │       DefectDojo Server (EC2 t3.medium)          │      │
+                        │  │                                                  │      │ 
+                        │  │  ┌────────────────────────────────────────────┐  │      │
+                        │  │  │      Docker Compose Stack                  │  │      │
+                        │  │  │                                            │  │      │
+                        │  │  │  • nginx          (Port 8080)              │  │      │
+                        │  │  │  • uwsgi          (Django App)             │  │      │
+                        │  │  │  • celeryworker   (Async Processing)       │  │      │
+                        │  │  │  • celerybeat     (Scheduler)              │  │      │
+                        │  │  │  • postgres       (Database)               │  │      │
+                        │  │  │  • redis          (Message Broker)         │  │      │
+                        │  │  └────────────────────────────────────────────┘  │      │
+                        │  └──────────────────────────────────────────────────┘      │
+                        └────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Product Configuration
+
+**Product** represents the application being tested. It acts as a container for all security engagements and findings.
+
+**Create Product:**
+
+1. Navigate to **Products** → **Add Product**
+2. Configure:
+   ```
+   Name: AWS-DevSecOps-Project
+   Description: PHP research application with CI/CD security scanning
+   Product Type: Web Application
+   Business Criticality: High
+   Lifecycle: Production
+   Tags: ci-cd, php, docker, aws
+   ```
+3. Click **Submit**
+
+**Via API (for automation):**
+
+```bash
+curl -X POST "http://<defectdojo-ip>:8080/api/v2/products/" \
+  -H "Authorization: Token <your-api-token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "AWS-DevSecOps-Project",
+    "description": "PHP research application",
+    "prod_type": 1,
+    "business_criticality": "high"
+  }'
+```
+
+---
+
+### . SLA Configuration
+
+**SLA (Service Level Agreement)** defines remediation timeframes based on vulnerability severity.
+
+**Configure SLA:**
+
+1. Navigate to **Configuration** → **SLA Configuration** → **Add SLA**
+2. Set remediation deadlines:
+
+| Severity | Remediation Time | Alert Frequency |
+|----------|------------------|-----------------|
+| **Critical** | 7 days | Daily |
+| **High** | 30 days | Weekly |
+| **Medium** | 90 days | Bi-weekly |
+| **Low** | 180 days | Monthly |
+
+3. Assign SLA to product
+
+**Impact:** DefectDojo automatically tracks overdue findings and sends notifications when SLAs are breached.
+
+---
+
+### . Engagement Creation
+
+**Engagement** represents a security testing activity (e.g., a CI/CD pipeline run). Each GitHub Actions workflow execution creates a new engagement.
+
+**Result:** Each commit/PR creates an engagement named like: `main-20251101-013355`
+
+---
+
+### . Security Pipeline Integration
+
+The GitHub Actions pipeline automatically uploads scan results to DefectDojo after each security test completes.
+
+**Integration Flow:**
+
+```
+GitHub Actions Workflow
+        │
+        ├─► Semgrep (SAST)          ──┐
+        ├─► Trivy (IaC)             ──┤
+        ├─► Trivy (Container)       ──┼──► DefectDojo API
+        └─► OWASP ZAP (DAST)        ──┘    /api/v2/import-scan/
+                                            
+                                           DefectDojo Dashboard
+                                           ├─ Engagement created
+                                           ├─ 4 Tests imported
+                                           └─ Findings aggregated
+```
+
+**Note:** OWASP ZAP uses Generic Findings Import format instead of the native ZAP parser to ensure reliable uploads (avoiding HTTP 500 errors).
+
+---
+
+### . DefectDojo Dashboard Results
+
+#### Product Overview
+
+![DefectDojo Product Dashboard](./assets/DefectDojoProduct.png)
+
+---
+
+#### Engagement View
+
+Each CI/CD pipeline run creates an engagement with multiple test types:
+
+![DefectDojo Engagement](./assets/DefectDojoEngagement.png)
+
+**Engagement:** `main-20251101-020623`
+
+---
+
+#### Finding Details
+
+DefectDojo provides detailed information for each vulnerability:
+
+![DefectDojo Finding Detail](./assets/DefectDojoFinding.png)
+
+---
 
 
+DefectDojo successfully transforms fragmented security scan results into a **unified, actionable vulnerability management system**. By automating the entire workflow—from engagement creation to finding import—the project achieves:
 
+- **Centralized Security Visibility** - All findings in one dashboard
+- **Full CI/CD Automation** - Zero manual intervention required
+- **Data-Driven Decisions** - Metrics for leadership and compliance
+- **Faster Remediation** - SLA tracking ensures accountability
+- **Improved Security Posture** - 0 critical vulnerabilities maintained
+
+This implementation demonstrates how modern DevSecOps practices enable **security at scale** while maintaining development velocity.
